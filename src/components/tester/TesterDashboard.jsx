@@ -177,7 +177,7 @@ const shortUrl = (url) => {
     return text.length > 40 ? `${text.slice(0, 40)}…` : text;
 };
 
-const PROJECT_STATUS_ORDER = ["active", "on_hold", "finished", "archived"];
+const PROJECT_STATUS_ORDER = ["active", "on hold", "finished", "archived"];
 
 const normalizeProjectStatus = (status) =>
     String(status || "other").toLowerCase().trim().replace(/[\s-]+/g, "_");

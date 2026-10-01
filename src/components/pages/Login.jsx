@@ -28,16 +28,20 @@ function Login() {
             const data = await response.json();
 
             if (response.ok && data.success) {
+                const rolePath = {
+                    admin: "/admin",
+                    developer: "/developer",
+                    tester: "/tester",
+                }[String(data.user?.role || "").toLowerCase()];
+
+                if (!rolePath) {
+                    setError("This account does not have a supported dashboard role.");
+                    return;
+                }
+
                 localStorage.setItem("token", data.token);
                 localStorage.setItem("user", JSON.stringify(data.user));
-
-                if (data.user.role === "admin") {
-                    navigate("/admin");
-                } else if (data.user.role === "developer") {
-                    navigate("/developer");
-                } else {
-                    navigate("/tester");
-                }
+                navigate(rolePath, { replace: true });
             } else {
                 setError(data.message || "Unable to sign in. Check your credentials and try again.");
             }
