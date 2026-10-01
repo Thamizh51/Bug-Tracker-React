@@ -1533,6 +1533,7 @@ body {
 }
 
 .copy-row {
+    min-width: 0;
     display: flex;
     align-items: stretch;
     gap: 6px;
@@ -1560,6 +1561,10 @@ body {
     white-space: nowrap;
     text-overflow: ellipsis;
     user-select: all;
+}
+
+.detail-item.full .copy-field {
+    min-width: 0;
 }
 
 .copy-btn,

@@ -167,19 +167,46 @@ function BugImage({ src, alt }) {
    CopyField — shows a URL with Copy + Open buttons
 ======================================================================== */
 
+const normalizeBugUrl = (value) => {
+    if (typeof value !== "string" || !value.trim()) return null;
+    const candidate = /^https?:\/\//i.test(value.trim())
+        ? value.trim()
+        : `https://${value.trim()}`;
+
+    try {
+        const parsed = new URL(candidate);
+        return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : null;
+    } catch {
+        return null;
+    }
+};
+
+const formatBugUrl = (value) => {
+    try {
+        const parsed = new URL(value);
+        const path = parsed.pathname === "/" ? "" : parsed.pathname;
+        const compact = `${parsed.host}${path}`;
+        return compact.length > 52 ? `${compact.slice(0, 49)}...` : compact;
+    } catch {
+        return value;
+    }
+};
+
 function CopyField({ label, value }) {
     const [copied, setCopied] = useState(false);
     const timer = useRef(null);
+    const normalizedUrl = normalizeBugUrl(value);
+    const copyValue = normalizedUrl || value;
 
     useEffect(() => () => clearTimeout(timer.current), []);
 
     const handleCopy = async () => {
         try {
-            await navigator.clipboard.writeText(value);
+            await navigator.clipboard.writeText(copyValue);
         } catch {
             // Fallback for non-secure contexts
             const area = document.createElement("textarea");
-            area.value = value;
+            area.value = copyValue;
             area.style.position = "fixed";
             area.style.opacity = "0";
             document.body.appendChild(area);
@@ -204,8 +231,8 @@ function CopyField({ label, value }) {
             <label>{label}</label>
 
             <div className="copy-row">
-                <span className="copy-url" title={value}>
-                    {value}
+                <span className="copy-url" title={copyValue}>
+                    {normalizedUrl ? formatBugUrl(normalizedUrl) : value}
                 </span>
 
                 <button
@@ -216,14 +243,16 @@ function CopyField({ label, value }) {
                     {copied ? "✓ Copied" : "⧉ Copy"}
                 </button>
 
-                <a
-                    className="open-btn"
-                    href={value}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    Open ↗
-                </a>
+                {normalizedUrl && (
+                    <a
+                        className="open-btn"
+                        href={normalizedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Open ↗
+                    </a>
+                )}
             </div>
         </div>
     );
@@ -1035,7 +1064,7 @@ function Dashboard() {
                                 </div>
                             </div>
 
-                            {(selectedBug.bug_url || selectedBug.url) && (
+                            {normalizeBugUrl(selectedBug.bug_url || selectedBug.url) && (
                                 <CopyField
                                     label="Bug URL"
                                     value={selectedBug.bug_url || selectedBug.url}

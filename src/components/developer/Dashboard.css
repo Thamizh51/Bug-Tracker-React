@@ -952,6 +952,7 @@ tbody tr:hover {
 }
 
 .copy-row {
+    min-width: 0;
     display: flex;
     align-items: stretch;
     gap: 6px;

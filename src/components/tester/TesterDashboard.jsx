@@ -11,7 +11,7 @@ const EMPTY_FORM = {
     team: "frontend",
     assigned_to: "",
     image: null,
-    bug_url: "",
+    url: "",
 };
 
 const parseJson = async (response) => {
@@ -150,7 +150,21 @@ function BugImage({ src, alt, className }) {
 const formatTeam = (team) =>
     team ? team.charAt(0).toUpperCase() + team.slice(1) : "Not assigned";
 
-const getBugUrl = (bug) => bug?.bug_url || bug?.url || null;
+const getBugUrl = (bug) => {
+    const raw = bug?.url || bug?.url;
+    if (typeof raw !== "string" || !raw.trim()) return null;
+
+    const candidate = /^https?:\/\//i.test(raw.trim())
+        ? raw.trim()
+        : `https://${raw.trim()}`;
+
+    try {
+        const parsed = new URL(candidate);
+        return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : null;
+    } catch {
+        return null;
+    }
+};
 
 const shortUrl = (url) => {
     let text = url;
@@ -204,7 +218,7 @@ function CopyField({ label, value }) {
 
             <div className="copy-row">
                 <span className="copy-url" title={value}>
-                    {value}
+                    {shortUrl(value)}
                 </span>
 
                 <button
@@ -472,7 +486,7 @@ function TesterDashboard() {
         formData.append("team", bugForm.team);
         formData.append("assigned_to", bugForm.assigned_to); // developer ID
 
-        if (bugForm.bug_url) formData.append("bug_url", bugForm.bug_url);
+        if (bugForm.url) formData.append("url", bugForm.url);
         if (bugForm.image) formData.append("image", bugForm.image);
 
         return formData;
@@ -532,7 +546,7 @@ function TesterDashboard() {
             team: (getBugTeam(bug) || "frontend").toLowerCase(),
             assigned_to: bug.assigned_to ? String(bug.assigned_to) : "",
             image: null,
-            bug_url: bug.bug_url || bug.url || "",
+            url: bug.url || bug.url || "",
         });
 
         setShowEditModal(true);
@@ -1275,8 +1289,8 @@ function TesterDashboard() {
                                 <label>Bug URL</label>
                                 <input
                                     type="url"
-                                    name="bug_url"
-                                    value={bugForm.bug_url}
+                                    name="url"
+                                    value={bugForm.url}
                                     onChange={handleFormChange}
                                     placeholder="https://..."
                                 />
