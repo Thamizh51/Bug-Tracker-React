@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { formatAssignedTeam, getAssignedTeam } from "../../utils/bugTeam";
 import "./TesterDashboard.css";
 
 const API_URL = "http://localhost:8000/api";
@@ -147,9 +148,6 @@ function BugImage({ src, alt, className }) {
     );
 }
 
-const formatTeam = (team) =>
-    team ? team.charAt(0).toUpperCase() + team.slice(1) : "Not assigned";
-
 const getBugUrl = (bug) => {
     const raw = bug?.url || bug?.url;
     if (typeof raw !== "string" || !raw.trim()) return null;
@@ -177,6 +175,16 @@ const shortUrl = (url) => {
     }
 
     return text.length > 40 ? `${text.slice(0, 40)}…` : text;
+};
+
+const PROJECT_STATUS_ORDER = ["active", "on_hold", "finished", "archived"];
+
+const normalizeProjectStatus = (status) =>
+    String(status || "other").toLowerCase().trim().replace(/[\s-]+/g, "_");
+
+const formatProjectStatus = (status) => {
+    if (status === "other") return "Other";
+    return status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 };
 
 /* URL field with Copy + Open buttons */
@@ -646,26 +654,6 @@ function TesterDashboard() {
 
     // The API may not send `team` on the bug itself, so fall back to the
     // assigned developer's team.
-    const getBugTeam = (bug) => {
-        const direct =
-            bug?.team ||
-            bug?.assigned_team ||
-            bug?.assigned_to_team ||
-            bug?.developer?.team ||
-            bug?.assignee?.team ||
-            bug?.assigned_developer?.team;
-
-        if (direct) return String(direct);
-
-        const developerId =
-            typeof bug?.assigned_to === "object" ? bug.assigned_to?.id : bug?.assigned_to;
-
-        const developer = developers.find((d) => String(d.id) === String(developerId));
-        const team = developer?.team || developer?.department || developer?.developer_team;
-
-        return team ? String(team) : null;
-    };
-
     const filteredBugs = useMemo(() => {
         const searchText = search.toLowerCase();
 
@@ -688,6 +676,23 @@ function TesterDashboard() {
     );
 
     const statistics = countStats(activePage === "project" ? bugs : allBugs);
+    const projectGroups = useMemo(() => {
+        const groupedProjects = new Map();
+
+        projects.forEach((project) => {
+            const status = normalizeProjectStatus(project.status);
+            groupedProjects.set(status, [...(groupedProjects.get(status) || []), project]);
+        });
+
+        return [...groupedProjects.entries()]
+            .sort(([firstStatus], [secondStatus]) => {
+                const firstOrder = PROJECT_STATUS_ORDER.indexOf(firstStatus);
+                const secondOrder = PROJECT_STATUS_ORDER.indexOf(secondStatus);
+                return (firstOrder < 0 ? PROJECT_STATUS_ORDER.length : firstOrder) -
+                    (secondOrder < 0 ? PROJECT_STATUS_ORDER.length : secondOrder);
+            })
+            .map(([status, items]) => ({ status, items }));
+    }, [projects]);
 
     /* ------------------------------------------------------------------ */
     /* Renderers                                                           */
@@ -797,7 +802,7 @@ function TesterDashboard() {
                                     )}
 
                                     <div className="retest-meta">
-                                        <span>Team: {formatTeam(getBugTeam(bug))}</span>
+                                        <span>Team: {formatAssignedTeam(getAssignedTeam(bug, developers))}</span>
                                         <span>
                                             Developer:{" "}
                                             {bug.assigned_to_name || bug.assigned_to || "Unassigned"}
@@ -923,7 +928,7 @@ function TesterDashboard() {
                                             </td>
 
                                             <td>
-                                                <span className="team-badge">{formatTeam(getBugTeam(bug))}</span>
+                                                <span className="team-badge">{formatAssignedTeam(getAssignedTeam(bug, developers))}</span>
                                             </td>
 
                                             <td>
@@ -1062,20 +1067,31 @@ function TesterDashboard() {
                     ) : projects.length === 0 ? (
                         <div className="sidebar-loading">No projects</div>
                     ) : (
-                        projects.map((project) => (
-                            <button
-                                key={project.id}
-                                className={`project-menu ${
-                                    activePage === "project" &&
-                                    selectedProject?.id === project.id
-                                        ? "active"
-                                        : ""
-                                }`}
-                                onClick={() => handleProjectSelect(project)}
-                            >
-                                <span className="project-dot" />
-                                <span>{project.name}</span>
-                            </button>
+                        projectGroups.map(({ status, items }) => (
+                            <div className="project-group" key={status}>
+                                <div className="project-group-heading">
+                                    <span>{formatProjectStatus(status)}</span>
+                                    <b>{items.length}</b>
+                                </div>
+                                {items.map((project) => (
+                                    <button
+                                        key={project.id}
+                                        className={`project-menu ${
+                                            activePage === "project" &&
+                                            selectedProject?.id === project.id
+                                                ? "active"
+                                                : ""
+                                        }`}
+                                        onClick={() => handleProjectSelect(project)}
+                                    >
+                                        <span className="project-dot" />
+                                        <span className="project-menu-name">{project.name}</span>
+                                        <span className={`project-status-chip project-status-${status}`}>
+                                            {formatProjectStatus(status)}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
                         ))
                     )}
                 </div>
@@ -1127,7 +1143,7 @@ function TesterDashboard() {
 
                             <div className="detail-item">
                                 <label>Assigned Team</label>
-                                <strong>{formatTeam(getBugTeam(selectedBug))}</strong>
+                                <strong>{formatAssignedTeam(getAssignedTeam(selectedBug, developers))}</strong>
                             </div>
 
                             <div className="detail-item">

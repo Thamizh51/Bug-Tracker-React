@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { formatAssignedTeam, getAssignedTeam } from "../../utils/bugTeam";
 import "./Dashboard.css";
 
 const API_URL = "http://localhost:8000/api";
@@ -897,6 +898,7 @@ function Dashboard() {
                                         <th>ID</th>
                                         <th>Bug</th>
                                         <th>Project</th>
+                                        <th>Team</th>
                                         <th>Priority</th>
                                         <th>Status</th>
                                         <th>Action</th>
@@ -925,6 +927,12 @@ function Dashboard() {
                                                     bug.project_name ||
                                                     selectedProject?.name ||
                                                     "—"}
+                                            </td>
+
+                                            <td>
+                                                <span className="team-badge">
+                                                    {formatAssignedTeam(getAssignedTeam(bug, [user]))}
+                                                </span>
                                             </td>
 
                                             <td>
@@ -1052,6 +1060,15 @@ function Dashboard() {
                                             selectedBug.assignee?.name ||
                                             user?.name ||
                                             "—"}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label>Assigned Team</label>
+                                    <p>
+                                        <span className="team-badge">
+                                            {formatAssignedTeam(getAssignedTeam(selectedBug, [user]))}
+                                        </span>
                                     </p>
                                 </div>
                             </div>
