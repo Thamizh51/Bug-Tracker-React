@@ -1320,7 +1320,7 @@ function AdminDashboard() {
                                         Active
                                     </option>
 
-                                    <option value="on hold">
+                                    <option value="onhold">
                                         On Hold
                                     </option>
 
@@ -1465,7 +1465,7 @@ function AdminDashboard() {
                                                                 Active
                                                             </option>
 
-                                                            <option value="on_hold">
+                                                            <option value="onhold">
                                                                 On Hold
                                                             </option>
 
@@ -2319,7 +2319,7 @@ function AdminDashboard() {
                                     Active
                                 </option>
 
-                                <option value="on_hold">
+                                <option value="onhold">
                                     On Hold
                                 </option>
 
