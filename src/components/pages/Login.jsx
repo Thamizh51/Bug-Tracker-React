@@ -1,11 +1,16 @@
 import "./Login.css";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 function Login() {
     const navigate = useNavigate();
+    const [error, setError] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     async function handleLogin(e) {
         e.preventDefault();
+        setError("");
+        setIsSubmitting(true);
 
         try {
             const response = await fetch("http://localhost:8000/api/login", {
@@ -22,24 +27,28 @@ function Login() {
 
             const data = await response.json();
 
-            console.log("Login response:", data);
-
             if (response.ok && data.success) {
+                const rolePath = {
+                    admin: "/admin",
+                    developer: "/developer",
+                    tester: "/tester",
+                }[String(data.user?.role || "").toLowerCase()];
+
+                if (!rolePath) {
+                    setError("This account does not have a supported dashboard role.");
+                    return;
+                }
+
                 localStorage.setItem("token", data.token);
                 localStorage.setItem("user", JSON.stringify(data.user));
-
-                if (data.user.role === "admin") {
-                    navigate("/admin");
-                } else if (data.user.role === "developer") {
-                    navigate("/developer");
-                } else {
-                    navigate("/tester");
-                }
+                navigate(rolePath, { replace: true });
             } else {
-                console.log("Login failed:", data.message);
+                setError(data.message || "Unable to sign in. Check your credentials and try again.");
             }
-        } catch (error) {
-            console.error("Login error:", error);
+        } catch {
+            setError("Could not reach the server. Check your connection and try again.");
+        } finally {
+            setIsSubmitting(false);
         }
     }
 
@@ -56,6 +65,8 @@ function Login() {
                     className="login-form"
                     onSubmit={handleLogin}
                 >
+                    {error && <p className="login-error" role="alert">{error}</p>}
+
                     <div className="form-group">
                         <label htmlFor="email">
                             Email
@@ -87,8 +98,9 @@ function Login() {
                     <button
                         type="submit"
                         className="login-button"
+                        disabled={isSubmitting}
                     >
-                        Login
+                        {isSubmitting ? "Signing in..." : "Login"}
                     </button>
                 </form>
 

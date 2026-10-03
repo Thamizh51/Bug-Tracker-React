@@ -113,6 +113,17 @@ body {
     gap: 20px;
 }
 
+.login-error {
+    margin: 0;
+    padding: 11px 13px;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
 .form-group {
     display: flex;
     flex-direction: column;
@@ -197,6 +208,13 @@ body {
 
     box-shadow:
         0 8px 20px rgba(79, 70, 229, 0.25);
+}
+
+.login-button:disabled {
+    cursor: wait;
+    opacity: 0.72;
+    transform: none;
+    box-shadow: none;
 }
 
 .login-button:active {

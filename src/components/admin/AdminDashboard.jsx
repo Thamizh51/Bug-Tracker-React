@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatAssignedTeam, getAssignedTeam } from "../../utils/bugTeam";
 import "./AdminDashboard.css";
 
 const API_URL = "http://localhost:8000/api";
@@ -27,6 +28,8 @@ function AdminDashboard() {
 
     const [showBugModal, setShowBugModal] =
         useState(false);
+
+    const bugDetailsRequestId = useRef(0);
 
     const [editingProject, setEditingProject] =
         useState(null);
@@ -401,6 +404,31 @@ function AdminDashboard() {
         }
     }
 
+    async function viewBugDetails(bug) {
+        const requestId = ++bugDetailsRequestId.current;
+        setSelectedBug(bug);
+        setShowBugModal(true);
+
+        try {
+            const response = await fetch(`${API_URL}/bugs/${bug.id}`, {
+                headers: headers(),
+            });
+
+            if (!response.ok) {
+                throw new Error("Unable to load bug details");
+            }
+
+            const data = await response.json();
+            if (requestId !== bugDetailsRequestId.current) return;
+
+            setSelectedBug(data.bug || data.data || data);
+        } catch (error) {
+            if (requestId === bugDetailsRequestId.current) {
+                showToast(error.message || "Unable to load bug details.", "error");
+            }
+        }
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Users
@@ -595,11 +623,24 @@ function AdminDashboard() {
     |--------------------------------------------------------------------------
     */
 
-    function logout() {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-
-        window.location.href = "/";
+    async function logout() {
+        try {
+            if (token) {
+                await fetch(`${API_URL}/logout`, {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        Accept: "application/json",
+                    },
+                });
+            }
+        } catch (error) {
+            console.error("Logout request failed:", error);
+        } finally {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            window.location.href = "/";
+        }
     }
 
     /*
@@ -913,26 +954,6 @@ function AdminDashboard() {
                         </b>
                     </button>
 
-
-                    <button
-                        className={
-                            activeSection ===
-                            "bugs"
-                                ? "nav-item active"
-                                : "nav-item"
-                        }
-                        onClick={() =>
-                            changeSection(
-                                "bugs"
-                            )
-                        }
-                    >
-                        <span>⚠</span>
-                        Bugs
-                        <b>
-                            {bugs.length}
-                        </b>
-                    </button>
 
                 </nav>
 
@@ -1299,7 +1320,7 @@ function AdminDashboard() {
                                         Active
                                     </option>
 
-                                    <option value="on_hold">
+                                    <option value="onhold">
                                         On Hold
                                     </option>
 
@@ -1444,7 +1465,7 @@ function AdminDashboard() {
                                                                 Active
                                                             </option>
 
-                                                            <option value="on_hold">
+                                                            <option value="onhold">
                                                                 On Hold
                                                             </option>
 
@@ -2020,6 +2041,10 @@ function AdminDashboard() {
                                                 </th>
 
                                                 <th>
+                                                    TEAM
+                                                </th>
+
+                                                <th>
                                                     PRIORITY
                                                 </th>
 
@@ -2095,6 +2120,13 @@ function AdminDashboard() {
 
 
                                                         <td>
+                                                            <span className="team-badge">
+                                                                {formatAssignedTeam(getAssignedTeam(bug, developers))}
+                                                            </span>
+                                                        </td>
+
+
+                                                        <td>
                                                             <PriorityBadge
                                                                 priority={
                                                                     bug.priority
@@ -2126,14 +2158,10 @@ function AdminDashboard() {
                                                         <td>
 
                                                             <button
+                                                                type="button"
                                                                 className="action-view"
                                                                 onClick={() => {
-                                                                    setSelectedBug(
-                                                                        bug
-                                                                    );
-                                                                    setShowBugModal(
-                                                                        true
-                                                                    );
+                                                                    viewBugDetails(bug);
                                                                 }}
                                                             >
                                                                 View
@@ -2291,7 +2319,7 @@ function AdminDashboard() {
                                     Active
                                 </option>
 
-                                <option value="on_hold">
+                                <option value="onhold">
                                     On Hold
                                 </option>
 
@@ -2513,11 +2541,10 @@ function AdminDashboard() {
 
                     <Modal
                         title={`Bug #${selectedBug.id}`}
-                        onClose={() =>
-                            setShowBugModal(
-                                false
-                            )
-                        }
+                        onClose={() => {
+                            bugDetailsRequestId.current++;
+                            setShowBugModal(false);
+                        }}
                     >
 
                         <div className="bug-modal-content">
@@ -2590,6 +2617,17 @@ function AdminDashboard() {
                                                 ?.name ||
                                             "Unassigned"
                                         }
+                                    </strong>
+                                </div>
+
+
+                                <div>
+                                    <span>
+                                        Assigned Team
+                                    </span>
+
+                                    <strong>
+                                        {formatAssignedTeam(getAssignedTeam(selectedBug, developers))}
                                     </strong>
                                 </div>
 
