@@ -9,7 +9,7 @@ const API_BASE = API_URL.replace(/\/api\/?$/, "");
    Helpers
 ======================================================================== */
 
-const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 // Open bugs first (critical -> low), closed bugs always at the bottom
 const sortBugs = (list) =>
@@ -901,7 +901,7 @@ function Dashboard() {
                             <option value="low">Low</option>
                             <option value="medium">Medium</option>
                             <option value="high">High</option>
-                            <option value="critical">Critical</option>
+                            <option value="urgent">Urgent</option>
                         </select>
 
                         <span className="result-count">{displayedBugs.length} bugs</span>

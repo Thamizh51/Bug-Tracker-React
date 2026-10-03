@@ -1959,8 +1959,8 @@ function AdminDashboard() {
                                         High
                                     </option>
 
-                                    <option value="critical">
-                                        Critical
+                                    <option value="urgent">
+                                        Urgent
                                     </option>
 
                                 </select>
