@@ -9,7 +9,7 @@ const API_BASE = API_URL.replace(/\/api\/?$/, "");
    Helpers
 ======================================================================== */
 
-const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 // Open bugs first (critical -> low), closed bugs always at the bottom
 const sortBugs = (list) =>
@@ -51,6 +51,34 @@ const formatStatus = (status) => {
     if (!value) return "Unknown";
 
     return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const getAssigneeName = (bug, currentUser) => {
+    const assignedTo = bug?.assigned_to;
+    const assignee =
+        bug?.assignee ||
+        bug?.developer ||
+        bug?.assigned_developer ||
+        (typeof assignedTo === "object" ? assignedTo : null);
+    const assignedName =
+        bug?.assigned_to_name ||
+        assignee?.name ||
+        (typeof assignedTo === "string" && Number.isNaN(Number(assignedTo))
+            ? assignedTo
+            : null);
+
+    if (assignedName) return assignedName;
+
+    const assignedId =
+        bug?.assigned_to_id ??
+        bug?.developer_id ??
+        bug?.assignee_id ??
+        assignee?.id ??
+        (typeof assignedTo === "object" ? assignedTo?.id : assignedTo);
+
+    return currentUser?.id != null && String(currentUser.id) === String(assignedId)
+        ? currentUser.name || "—"
+        : "—";
 };
 
 /*
@@ -352,6 +380,7 @@ function Dashboard() {
 
     const [selectedProject, setSelectedProject] = useState(null);
     const [projectBugs, setProjectBugs] = useState([]);
+    const [projectStatsBugs, setProjectStatsBugs] = useState([]);
 
     const [selectedBug, setSelectedBug] = useState(null);
 
@@ -363,6 +392,7 @@ function Dashboard() {
     const [error, setError] = useState("");
 
     const [search, setSearch] = useState("");
+    const [projectSearch, setProjectSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [priorityFilter, setPriorityFilter] = useState("all");
 
@@ -373,6 +403,7 @@ function Dashboard() {
 
     const toastTimer = useRef(null);
     const projectRequestId = useRef(0);
+    const projectStatsRequestId = useRef(0);
     const bugRequestId = useRef(0);
     const bugsSectionRef = useRef(null);
 
@@ -492,6 +523,11 @@ function Dashboard() {
     async function loadProjectBugs(project, page = 1) {
         const requestId = ++projectRequestId.current;
 
+        if (page === 1) {
+            projectStatsRequestId.current++;
+            setProjectStatsBugs([]);
+        }
+
         try {
             setProjectLoading(true);
             setError("");
@@ -513,7 +549,37 @@ function Dashboard() {
 
             setProjectBugs(Array.isArray(list) ? list : []);
             setProjectPage(data.current_page || data.meta?.current_page || page);
-            setProjectLastPage(data.last_page || data.meta?.last_page || 1);
+            const lastPage = data.last_page || data.meta?.last_page || 1;
+            setProjectLastPage(lastPage);
+
+            if (page === 1) {
+                const statsRequestId = projectStatsRequestId.current;
+                const firstPage = Array.isArray(list) ? list : [];
+                setProjectStatsBugs(firstPage);
+
+                if (lastPage > 1) {
+                    Promise.all(
+                        Array.from({ length: lastPage - 1 }, (_, index) => index + 2).map(
+                            async (pageNumber) => {
+                                try {
+                                    const pageData = await request(
+                                        `/projects/${project.id}/bugs?page=${pageNumber}`
+                                    );
+                                    const pageBugs = pageData.bugs || pageData.data || [];
+                                    return Array.isArray(pageBugs) ? pageBugs : [];
+                                } catch (err) {
+                                    console.error(err);
+                                    return [];
+                                }
+                            }
+                        )
+                    ).then((remainingPages) => {
+                        if (statsRequestId === projectStatsRequestId.current) {
+                            setProjectStatsBugs([firstPage, ...remainingPages].flat());
+                        }
+                    });
+                }
+            }
         } catch (err) {
             console.error(err);
 
@@ -530,9 +596,11 @@ function Dashboard() {
 
     function showAssignedBugs() {
         projectRequestId.current++;
+        projectStatsRequestId.current++;
 
         setSelectedProject(null);
         setProjectBugs([]);
+        setProjectStatsBugs([]);
         setProjectLoading(false);
         closeBug();
 
@@ -654,20 +722,27 @@ function Dashboard() {
         priorityFilter,
     ]);
 
+    const statsBugs = selectedProject ? projectStatsBugs : assignedBugs;
     const countByStatus = (status) =>
-        assignedBugs.filter((bug) => normalizeStatus(bug.status) === status).length;
+        statsBugs.filter((bug) => normalizeStatus(bug.status) === status).length;
+
+    const filteredProjects = useMemo(() => {
+        const searchText = projectSearch.trim().toLowerCase();
+        return projects.filter((project) =>
+            String(project.name || "").toLowerCase().includes(searchText)
+        );
+    }, [projects, projectSearch]);
 
     const stats = [
-        { label: "Assigned Bugs", value: assignedBugs.length, icon: "#", tone: "total", filter: "all" },
+        { label: selectedProject ? "Project Bugs" : "Assigned Bugs", value: statsBugs.length, icon: "#", tone: "total", filter: "all" },
         { label: "Pending", value: countByStatus("pending"), icon: "!", tone: "pending", filter: "pending" },
         { label: "In Progress", value: countByStatus("in_progress"), icon: "↻", tone: "progress", filter: "in_progress" },
         { label: "Reopened", value: countByStatus("reopened"), icon: "↺", tone: "reopened", filter: "reopened" },
         { label: "Resolved", value: countByStatus("resolved"), icon: "✓", tone: "resolved", filter: "resolved" },
     ];
 
-    // Clicking a card shows the assigned bugs filtered by that status
+    // Clicking a card filters bugs in the current project or assigned-bugs view
     const handleStatClick = (filter) => {
-        showAssignedBugs();
         setStatusFilter(filter);
 
         setTimeout(() => {
@@ -749,8 +824,7 @@ function Dashboard() {
             {/* STATISTICS */}
             <section className="stats-container">
                 {stats.map((stat) => {
-                    const active =
-                        selectedProject === null && statusFilter === stat.filter;
+                    const active = statusFilter === stat.filter;
 
                     return (
                         <button
@@ -774,11 +848,6 @@ function Dashboard() {
             <div className="dashboard-layout">
                 {/* SIDEBAR */}
                 <aside className="projects-sidebar">
-                    <div className="sidebar-heading">
-                        <h2>Projects</h2>
-                        <span>{projects.length} projects</span>
-                    </div>
-
                     <button
                         className={`project-item ${selectedProject === null ? "active" : ""}`}
                         onClick={showAssignedBugs}
@@ -787,7 +856,7 @@ function Dashboard() {
                             <div className="project-icon">✓</div>
 
                             <div>
-                                <strong>My Assigned Bugs</strong>
+                                <strong >My Assigned Bugs</strong>
                                 <small>Bugs assigned to me</small>
                             </div>
                         </div>
@@ -795,8 +864,30 @@ function Dashboard() {
                         <span className="bug-count">{assignedBugs.length}</span>
                     </button>
 
+                    <div className="sidebar-heading">
+                        <h2>Projects</h2>
+                        <span>{projects.length} projects</span>
+                    </div>
+
+                    <div className="project-search">
+                        <span aria-hidden="true">⌕</span>
+                        <input
+                            type="search"
+                            placeholder="Search projects..."
+                            aria-label="Search projects"
+                            value={projectSearch}
+                            onChange={(event) => setProjectSearch(event.target.value)}
+                        />
+                    </div>
+
                     <div className="project-list">
-                        {projects.map((project) => (
+                        {filteredProjects.length === 0 ? (
+                            <p className="project-search-empty">
+                                {projects.length === 0
+                                    ? "No projects available."
+                                    : "No matching projects."}
+                            </p>
+                        ) : filteredProjects.map((project) => (
                             <button
                                 key={project.id}
                                 className={`project-item ${
@@ -873,7 +964,7 @@ function Dashboard() {
                             <option value="low">Low</option>
                             <option value="medium">Medium</option>
                             <option value="high">High</option>
-                            <option value="critical">Critical</option>
+                            <option value="urgent">Urgent</option>
                         </select>
 
                         <span className="result-count">{displayedBugs.length} bugs</span>
@@ -1056,10 +1147,7 @@ function Dashboard() {
                                 <div>
                                     <label>Assigned To</label>
                                     <p>
-                                        {selectedBug.assigned_to_name ||
-                                            selectedBug.assignee?.name ||
-                                            user?.name ||
-                                            "—"}
+                                        {getAssigneeName(selectedBug, user)}
                                     </p>
                                 </div>
 

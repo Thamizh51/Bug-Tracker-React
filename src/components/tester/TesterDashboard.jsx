@@ -149,7 +149,7 @@ function BugImage({ src, alt, className }) {
 }
 
 const getBugUrl = (bug) => {
-    const raw = bug?.url || bug?.url;
+    const raw = bug?.url;
     if (typeof raw !== "string" || !raw.trim()) return null;
 
     const candidate = /^https?:\/\//i.test(raw.trim())
@@ -272,6 +272,7 @@ function TesterDashboard() {
     const [showViewModal, setShowViewModal] = useState(false);
 
     const [search, setSearch] = useState("");
+    const [projectSearch, setProjectSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
 
     const [toast, setToast] = useState(null);
@@ -551,10 +552,10 @@ function TesterDashboard() {
             title: bug.title || "",
             description: bug.description || "",
             priority: bug.priority || "medium",
-            team: (getBugTeam(bug) || "frontend").toLowerCase(),
+            team: String(getAssignedTeam(bug, developers) || "frontend").toLowerCase(),
             assigned_to: bug.assigned_to ? String(bug.assigned_to) : "",
             image: null,
-            url: bug.url || bug.url || "",
+            url: bug.url || "",
         });
 
         setShowEditModal(true);
@@ -565,9 +566,12 @@ function TesterDashboard() {
             const detail = data.bug || data.data || data;
             setSelectedBug(detail);
 
-            const detailTeam = getBugTeam(detail);
+            const detailTeam = getAssignedTeam(detail, developers);
             if (detailTeam) {
-                setBugForm((previous) => ({ ...previous, team: detailTeam.toLowerCase() }));
+                setBugForm((previous) => ({
+                    ...previous,
+                    team: String(detailTeam).toLowerCase(),
+                }));
             }
         } catch {
             /* ignore */
@@ -628,6 +632,7 @@ function TesterDashboard() {
             showToast(error.message || "Retest failed", "error");
         }
     };
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
 
     const handleLogout = async () => {
         try {
@@ -652,8 +657,6 @@ function TesterDashboard() {
     /* Derived data                                                        */
     /* ------------------------------------------------------------------ */
 
-    // The API may not send `team` on the bug itself, so fall back to the
-    // assigned developer's team.
     const filteredBugs = useMemo(() => {
         const searchText = search.toLowerCase();
 
@@ -676,10 +679,19 @@ function TesterDashboard() {
     );
 
     const statistics = countStats(activePage === "project" ? bugs : allBugs);
+
+    const matchingProjects = useMemo(() => {
+        const searchText = projectSearch.trim().toLowerCase();
+
+        return projects.filter((project) =>
+            String(project.name || "").toLowerCase().includes(searchText)
+        );
+    }, [projects, projectSearch]);
+
     const projectGroups = useMemo(() => {
         const groupedProjects = new Map();
 
-        projects.forEach((project) => {
+        matchingProjects.forEach((project) => {
             const status = normalizeProjectStatus(project.status);
             groupedProjects.set(status, [...(groupedProjects.get(status) || []), project]);
         });
@@ -688,11 +700,13 @@ function TesterDashboard() {
             .sort(([firstStatus], [secondStatus]) => {
                 const firstOrder = PROJECT_STATUS_ORDER.indexOf(firstStatus);
                 const secondOrder = PROJECT_STATUS_ORDER.indexOf(secondStatus);
-                return (firstOrder < 0 ? PROJECT_STATUS_ORDER.length : firstOrder) -
-                    (secondOrder < 0 ? PROJECT_STATUS_ORDER.length : secondOrder);
+                return (
+                    (firstOrder < 0 ? PROJECT_STATUS_ORDER.length : firstOrder) -
+                    (secondOrder < 0 ? PROJECT_STATUS_ORDER.length : secondOrder)
+                );
             })
             .map(([status, items]) => ({ status, items }));
-    }, [projects]);
+    }, [matchingProjects]);
 
     /* ------------------------------------------------------------------ */
     /* Renderers                                                           */
@@ -737,7 +751,7 @@ function TesterDashboard() {
             <div className="dashboard-header">
                 <div>
                     <span className="eyebrow">TESTER DASHBOARD</span>
-                    <h1>Dashboard</h1>
+                    <h1>Hello {user.name},</h1>
                     <p>Overview of your projects and testing activity.</p>
                 </div>
             </div>
@@ -745,13 +759,6 @@ function TesterDashboard() {
             {renderStatistics()}
 
             <section className="dashboard-panels">
-                <div className="dashboard-panel">
-                    <h2>Projects</h2>
-                    <p>Select a project from the sidebar to manage its bugs.</p>
-                    <strong>{projects.length}</strong>
-                    <span>Available Projects</span>
-                </div>
-
                 <div className="dashboard-panel retest-panel">
                     <h2>Waiting for Retest</h2>
                     <p>Resolved bugs waiting for verification.</p>
@@ -759,6 +766,28 @@ function TesterDashboard() {
 
                     <button onClick={() => setActivePage("resolved")}>
                         View Resolved Bugs →
+                    </button>
+                </div>
+                <div className="dashboard-panel retest-panel">
+                    <h2>Search The Project</h2>
+                    <input
+                        className="search-field"
+                        type="text"
+                        placeholder="Search projects..."
+                        value={projectSearch}
+                        onChange={(e) => setProjectSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && matchingProjects.length > 0) {
+                                handleProjectSelect(matchingProjects[0]);
+                            }
+                        }}
+                    />
+
+                    <button
+                        onClick={() => handleProjectSelect(matchingProjects[0])}
+                        disabled={!projectSearch.trim() || matchingProjects.length === 0}
+                    >
+                        Go To The Project →
                     </button>
                 </div>
             </section>
@@ -802,7 +831,10 @@ function TesterDashboard() {
                                     )}
 
                                     <div className="retest-meta">
-                                        <span>Team: {formatAssignedTeam(getAssignedTeam(bug, developers))}</span>
+                                        <span>
+                                            Team:{" "}
+                                            {formatAssignedTeam(getAssignedTeam(bug, developers))}
+                                        </span>
                                         <span>
                                             Developer:{" "}
                                             {bug.assigned_to_name || bug.assigned_to || "Unassigned"}
@@ -900,7 +932,7 @@ function TesterDashboard() {
                                 <tr>
                                     <th>Bug</th>
                                     <th>Team</th>
-                                    <th>Developer</th>
+                                    <th>Assigned Developer</th>
                                     <th>Priority</th>
                                     <th>Status</th>
                                     <th>Actions</th>
@@ -921,14 +953,15 @@ function TesterDashboard() {
                                                 <div className="bug-name">
                                                     <strong>{bug.title}</strong>
                                                     <span>#{bug.id}</span>
-                                                    <small>
-                                                        {(bug.description || "").substring(0, 70)}
-                                                    </small>
                                                 </div>
                                             </td>
 
                                             <td>
-                                                <span className="team-badge">{formatAssignedTeam(getAssignedTeam(bug, developers))}</span>
+                                                <span className="team-badge">
+                                                    {formatAssignedTeam(
+                                                        getAssignedTeam(bug, developers)
+                                                    )}
+                                                </span>
                                             </td>
 
                                             <td>
@@ -1066,6 +1099,8 @@ function TesterDashboard() {
                         <div className="sidebar-loading">Loading...</div>
                     ) : projects.length === 0 ? (
                         <div className="sidebar-loading">No projects</div>
+                    ) : projectGroups.length === 0 ? (
+                        <div className="sidebar-loading">No matching projects</div>
                     ) : (
                         projectGroups.map(({ status, items }) => (
                             <div className="project-group" key={status}>
@@ -1073,6 +1108,7 @@ function TesterDashboard() {
                                     <span>{formatProjectStatus(status)}</span>
                                     <b>{items.length}</b>
                                 </div>
+
                                 {items.map((project) => (
                                     <button
                                         key={project.id}
@@ -1086,7 +1122,9 @@ function TesterDashboard() {
                                     >
                                         <span className="project-dot" />
                                         <span className="project-menu-name">{project.name}</span>
-                                        <span className={`project-status-chip project-status-${status}`}>
+                                        <span
+                                            className={`project-status-chip project-status-${status}`}
+                                        >
                                             {formatProjectStatus(status)}
                                         </span>
                                     </button>
@@ -1143,7 +1181,9 @@ function TesterDashboard() {
 
                             <div className="detail-item">
                                 <label>Assigned Team</label>
-                                <strong>{formatAssignedTeam(getAssignedTeam(selectedBug, developers))}</strong>
+                                <strong>
+                                    {formatAssignedTeam(getAssignedTeam(selectedBug, developers))}
+                                </strong>
                             </div>
 
                             <div className="detail-item">
@@ -1162,10 +1202,7 @@ function TesterDashboard() {
 
                             {getBugUrl(selectedBug) && (
                                 <div className="detail-item full">
-                                    <CopyField
-                                        label="Bug URL"
-                                        value={getBugUrl(selectedBug)}
-                                    />
+                                    <CopyField label="Bug URL" value={getBugUrl(selectedBug)} />
                                 </div>
                             )}
 
@@ -1259,7 +1296,7 @@ function TesterDashboard() {
                                         <option value="low">Low</option>
                                         <option value="medium">Medium</option>
                                         <option value="high">High</option>
-                                        <option value="critical">Critical</option>
+                                        <option value="urgent">Urgent</option>
                                     </select>
                                 </div>
 
