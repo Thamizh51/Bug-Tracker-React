@@ -82,6 +82,7 @@ function AdminDashboard() {
         email: "",
         password: "",
         role: "developer",
+        department: "frontend",
     });
 
     /*
@@ -508,9 +509,12 @@ function AdminDashboard() {
                 {
                     method: "POST",
                     headers: headers(),
-                    body: JSON.stringify(
-                        userForm
-                    ),
+                    body: JSON.stringify({
+                        ...userForm,
+                        ...(userForm.role === "developer"
+                            ? {}
+                            : { department: undefined }),
+                    }),
                 }
             );
 
@@ -551,6 +555,7 @@ function AdminDashboard() {
             email: "",
             password: "",
             role: "developer",
+            department: "frontend",
         });
 
         setShowUserModal(true);
@@ -564,6 +569,7 @@ function AdminDashboard() {
             email: user.email || "",
             password: "",
             role: user.role || "developer",
+            department: user.department || "frontend",
         });
 
         setShowUserModal(true);
@@ -1024,30 +1030,6 @@ function AdminDashboard() {
 
                     <section className="section-content">
 
-                        <div className="welcome-card">
-
-                            <div>
-                                <span>
-                                    Welcome back
-                                </span>
-
-                                <h2>
-                                    Manage your
-                                    Bug Tracker
-                                </h2>
-
-                                <p>
-                                    Manage projects,
-                                    users and bugs
-                                    from one place.
-                                </p>
-                            </div>
-
-                            <div className="welcome-decoration">
-                                ⚙
-                            </div>
-
-                        </div>
 
 
                         <div className="statistics-grid">
@@ -1223,16 +1205,6 @@ function AdminDashboard() {
                                 <div className="role-overview">
 
                                     <RoleBar
-                                        label="Administrators"
-                                        value={
-                                            adminCount
-                                        }
-                                        total={
-                                            users.length
-                                        }
-                                    />
-
-                                    <RoleBar
                                         label="Developers"
                                         value={
                                             developerCount
@@ -1388,10 +1360,6 @@ function AdminDashboard() {
                                             </th>
 
                                             <th>
-                                                BUGS
-                                            </th>
-
-                                            <th>
                                                 ACTIONS
                                             </th>
                                         </tr>
@@ -1487,17 +1455,6 @@ function AdminDashboard() {
                                                             project.created_at
                                                         )}
                                                     </td>
-
-
-                                                    <td>
-                                                        <span className="number-badge">
-                                                            {project.bugs_count ??
-                                                                project.bugs
-                                                                    ?.length ??
-                                                                0}
-                                                        </span>
-                                                    </td>
-
 
                                                     <td>
 
@@ -2501,6 +2458,28 @@ function AdminDashboard() {
                             </select>
 
                         </FormField>
+
+
+                        {userForm.role === "developer" && (
+                            <FormField
+                                label="Department"
+                                required
+                            >
+                                <select
+                                    value={userForm.department}
+                                    onChange={(e) =>
+                                        setUserForm({
+                                            ...userForm,
+                                            department: e.target.value,
+                                        })
+                                    }
+                                    required
+                                >
+                                    <option value="frontend">Frontend</option>
+                                    <option value="backend">Backend</option>
+                                </select>
+                            </FormField>
+                        )}
 
 
                         <div className="modal-actions">

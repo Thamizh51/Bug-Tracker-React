@@ -53,6 +53,34 @@ const formatStatus = (status) => {
     return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
+const getAssigneeName = (bug, currentUser) => {
+    const assignedTo = bug?.assigned_to;
+    const assignee =
+        bug?.assignee ||
+        bug?.developer ||
+        bug?.assigned_developer ||
+        (typeof assignedTo === "object" ? assignedTo : null);
+    const assignedName =
+        bug?.assigned_to_name ||
+        assignee?.name ||
+        (typeof assignedTo === "string" && Number.isNaN(Number(assignedTo))
+            ? assignedTo
+            : null);
+
+    if (assignedName) return assignedName;
+
+    const assignedId =
+        bug?.assigned_to_id ??
+        bug?.developer_id ??
+        bug?.assignee_id ??
+        assignee?.id ??
+        (typeof assignedTo === "object" ? assignedTo?.id : assignedTo);
+
+    return currentUser?.id != null && String(currentUser.id) === String(assignedId)
+        ? currentUser.name || "—"
+        : "—";
+};
+
 /*
  * Builds a working image URL from whatever the API returns:
  * - full URL            -> used as is (host fixed if it points to wrong server)
@@ -1056,10 +1084,7 @@ function Dashboard() {
                                 <div>
                                     <label>Assigned To</label>
                                     <p>
-                                        {selectedBug.assigned_to_name ||
-                                            selectedBug.assignee?.name ||
-                                            user?.name ||
-                                            "—"}
+                                        {getAssigneeName(selectedBug, user)}
                                     </p>
                                 </div>
 

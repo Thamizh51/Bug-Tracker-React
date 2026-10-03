@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bug Tracker | Product Workflow Brief</title>
+  <style>
+    :root {
+      --ink: #182a36;
+      --muted: #53656f;
+      --line: #d7e0e3;
+      --paper: #ffffff;
+      --wash: #f2f6f5;
+      --teal: #087f78;
+      --teal-light: #e1f3ef;
+      --coral: #c55745;
+      --coral-light: #fff0eb;
+      --gold: #9b6a1d;
+      --gold-light: #fff5dd;
+      --slate-light: #eaf0f3;
+    }
+    * { box-sizing: border-box; }
+    html { background: #e8edee; color: var(--ink); }
+    body {
+      width: 210mm;
+      margin: 20px auto;
+      background: var(--paper);
+      font: 10pt/1.48 "Aptos", "Segoe UI", sans-serif;
+      box-shadow: 0 10px 40px rgba(24, 42, 54, .12);
+    }
+    .page { min-height: 297mm; padding: 16mm 17mm 15mm; position: relative; }
+    .page + .page { border-top: 1px solid var(--line); }
+    .topline { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 8px; color: var(--muted); font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; }
+    .brand { display: flex; gap: 8px; align-items: center; color: var(--ink); font-weight: 700; letter-spacing: .02em; }
+    .brand-mark { display: inline-grid; place-items: center; width: 22px; height: 22px; color: white; background: var(--teal); font-size: 9pt; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 580px; margin: 21mm 0 5mm; font-size: 34pt; line-height: 1.04; letter-spacing: 0; }
+    h2 { margin: 0 0 4mm; font-size: 19pt; line-height: 1.12; }
+    h3 { margin: 0 0 2mm; font-size: 11pt; }
+    p { margin-bottom: 3mm; }
+    .eyebrow { color: var(--teal); font-size: 8pt; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+    .subtitle { max-width: 540px; color: var(--muted); font-size: 13pt; line-height: 1.45; }
+    .meta { margin-top: 8mm; display: flex; gap: 16mm; color: var(--muted); font-size: 9pt; }
+    .meta strong { display: block; color: var(--ink); font-size: 8pt; text-transform: uppercase; letter-spacing: .06em; }
+    .summary-band { margin-top: 15mm; padding: 7mm 8mm; border-left: 4px solid var(--teal); background: var(--wash); }
+    .summary-band strong { display: block; margin-bottom: 2mm; }
+    .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 10mm; margin: 12mm 0 5mm; }
+    .section-heading p { max-width: 75mm; margin: 0; color: var(--muted); font-size: 9pt; }
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6mm; align-items: stretch; margin: 7mm 0 4mm; }
+    .flow-step { position: relative; min-height: 35mm; padding: 4mm; border: 1px solid var(--line); background: white; }
+    .flow-step:not(:last-child)::after { content: ">"; position: absolute; right: -5mm; top: 12mm; color: var(--teal); font-weight: 700; font-size: 14pt; }
+    .step-no { display: block; color: var(--teal); font-size: 8pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .flow-step strong { display: block; margin: 2mm 0 1mm; font-size: 10pt; }
+    .flow-step p { margin: 0; color: var(--muted); font-size: 8.3pt; line-height: 1.35; }
+    .loop { margin: 4mm 0 0; padding: 3mm 4mm; background: var(--coral-light); color: #74392e; font-size: 9pt; }
+    .keyline { margin-top: 9mm; border-top: 1px solid var(--line); padding-top: 4mm; color: var(--muted); font-size: 8.5pt; }
+    .keyline strong { color: var(--ink); }
+    .page-title { margin: 12mm 0 2mm; }
+    .page-intro { max-width: 155mm; color: var(--muted); }
+    .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; margin-top: 7mm; }
+    .role-card { min-height: 75mm; padding: 6mm; border-top: 3px solid var(--teal); background: var(--wash); }
+    .role-card.admin { border-color: var(--gold); }
+    .role-card.developer { border-color: var(--teal); }
+    .role-card.tester { border-color: var(--coral); }
+    .role-card h3 { font-size: 13pt; }
+    .role-card .role-tag { margin-bottom: 3mm; color: var(--muted); font-size: 8pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    ol, ul { margin: 2mm 0 0; padding-left: 5mm; }
+    li { margin: 1.6mm 0; }
+    .role-card li { font-size: 9pt; }
+    .mini-note { margin-top: 3mm; padding: 3mm; background: white; color: var(--muted); font-size: 8.5pt; }
+    .table { width: 100%; border-collapse: collapse; margin: 5mm 0 0; font-size: 9pt; }
+    .table th { padding: 3mm; background: var(--ink); color: white; text-align: left; font-size: 8pt; letter-spacing: .06em; text-transform: uppercase; }
+    .table td { padding: 3mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .table td:first-child { width: 28%; font-weight: 700; }
+    .callout { margin-top: 7mm; padding: 5mm 6mm; background: var(--gold-light); border-left: 3px solid var(--gold); }
+    .callout h3 { color: #704c17; }
+    .callout p, .callout li { font-size: 9pt; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; margin-top: 7mm; }
+    .panel { padding: 5mm; border: 1px solid var(--line); }
+    .panel h3 { margin-bottom: 3mm; }
+    .panel ul { font-size: 8.7pt; }
+    .footer { position: absolute; left: 17mm; right: 17mm; bottom: 8mm; display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 3mm; color: var(--muted); font-size: 7.5pt; }
+    .small { color: var(--muted); font-size: 8pt; }
+    @media print {
+      @page { size: A4; margin: 0; }
+      html { background: white; }
+      body { width: auto; margin: 0; box-shadow: none; }
+      .page { height: 297mm; min-height: 297mm; page-break-after: always; break-after: page; }
+      .page:last-child { page-break-after: auto; break-after: auto; }
+      .page + .page { border-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <section class="page">
+    <div class="topline"><div class="brand"><span class="brand-mark">BT</span> Bug Tracker</div><span>Product workflow brief</span></div>
+    <div class="eyebrow" style="margin-top: 17mm">Current-state overview</div>
+    <h1>From bug report<br>to verified fix</h1>
+    <p class="subtitle">A role-based workflow for reporting, assigning, resolving, and retesting software defects across projects.</p>
+    <div class="meta">
+      <div><strong>Prepared for</strong>Product Management</div>
+      <div><strong>Reviewed</strong>03 October 2026</div>
+      <div><strong>Scope</strong>Frontend application behavior</div>
+    </div>
+    <div class="summary-band">
+      <strong>Product outcome</strong>
+      The tracker connects tester-reported issues to a team-matched developer, keeps progress visible, and returns resolved work to testing for a close-or-reopen decision.
+    </div>
+    <div class="section-heading">
+      <div><span class="eyebrow">End-to-end journey</span><h2 style="margin-top: 2mm">The core feedback loop</h2></div>
+      <p>Admin setup enables work; the Tester and Developer roles drive the bug lifecycle.</p>
+    </div>
+    <div class="flow">
+      <div class="flow-step"><span class="step-no">01 / Admin</span><strong>Set up workspace</strong><p>Create projects and role-based accounts; assign developer departments.</p></div>
+      <div class="flow-step"><span class="step-no">02 / Tester</span><strong>Report a bug</strong><p>Select project, describe issue, set priority/team, choose a developer.</p></div>
+      <div class="flow-step"><span class="step-no">03 / Developer</span><strong>Fix the issue</strong><p>Review assigned bugs and update status through resolution.</p></div>
+      <div class="flow-step"><span class="step-no">04 / Tester</span><strong>Retest</strong><p>Check the resolved issue against the expected behavior.</p></div>
+      <div class="flow-step"><span class="step-no">05 / Tester</span><strong>Close or reopen</strong><p>Close when fixed; reopen when the defect persists.</p></div>
+    </div>
+    <div class="loop"><strong>Rework loop:</strong> Reopened bugs return to active project work for another developer pass, then return to tester verification.</div>
+    <div class="footer"><span>Bug Tracker | Product workflow</span><span>01</span></div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><div class="brand"><span class="brand-mark">BT</span> Bug Tracker</div><span>Role-based workflows</span></div>
+    <div class="page-title"><span class="eyebrow">Who does what</span><h2 style="margin-top: 2mm">Role workflows</h2></div>
+    <p class="page-intro">Users sign in with email and password. The application routes them to the dashboard associated with their account role and restricts dashboard routes to that role.</p>
+    <div class="role-grid">
+      <article class="role-card admin">
+        <div class="role-tag">Workspace owner</div><h3>Administrator</h3>
+        <ol>
+          <li>Create and maintain projects.</li>
+          <li>Set project status: Active, On Hold, Finished, or Archived.</li>
+          <li>Create accounts with Admin, Developer, or Tester roles.</li>
+          <li>For Developer accounts, choose Frontend or Backend department.</li>
+          <li>Review project bugs, user counts, and role-level dashboard summaries.</li>
+        </ol>
+        <div class="mini-note"><strong>Operational boundary:</strong> Admin can view bug details, but bug assignment or status changes are not exposed in this dashboard.</div>
+      </article>
+      <article class="role-card tester">
+        <div class="role-tag">Quality assurance</div><h3>Tester</h3>
+        <ol>
+          <li>Browse projects and open a project bug list.</li>
+          <li>Create a bug with title, description, priority, team, and a team-matched developer.</li>
+          <li>Optionally attach a bug URL and screenshot.</li>
+          <li>View, edit, or delete reported bugs.</li>
+          <li>Review resolved bugs, then Close or Reopen after retesting.</li>
+        </ol>
+        <div class="mini-note"><strong>Assignment rule:</strong> Changing Frontend/Backend filters the developer choices and clears the previous selection.</div>
+      </article>
+      <article class="role-card developer">
+        <div class="role-tag">Engineering delivery</div><h3>Developer</h3>
+        <ol>
+          <li>Review bugs assigned to the signed-in developer.</li>
+          <li>Search and filter assigned or project bugs by status and priority.</li>
+          <li>Open details, including description, links, and screenshots.</li>
+          <li>Update status to Pending, In Progress, or Resolved.</li>
+          <li>Return resolved work to the tester retest queue.</li>
+        </ol>
+        <div class="mini-note"><strong>Ownership:</strong> Assignment is made from the tester bug form; developer dashboard actions focus on status and review.</div>
+      </article>
+      <article class="role-card">
+        <div class="role-tag">Shared experience</div><h3>Cross-role behavior</h3>
+        <ol>
+          <li>Role is taken from the authenticated user record.</li>
+          <li>Session token is used for API requests.</li>
+          <li>Logout calls the API and clears local session data.</li>
+          <li>Bug/project lists provide search, filters, summaries, and detail views.</li>
+        </ol>
+        <div class="mini-note"><strong>System dependency:</strong> The frontend calls a separate API service at the configured API base URL.</div>
+      </article>
+    </div>
+    <div class="footer"><span>Bug Tracker | Product workflow</span><span>02</span></div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><div class="brand"><span class="brand-mark">BT</span> Bug Tracker</div><span>Lifecycle and planning notes</span></div>
+    <div class="page-title"><span class="eyebrow">Status model</span><h2 style="margin-top: 2mm">Bug lifecycle and product notes</h2></div>
+    <table class="table">
+      <thead><tr><th>Stage</th><th>Owner and action</th><th>Outcome</th></tr></thead>
+      <tbody>
+        <tr><td>Pending</td><td>Developer reviews newly assigned work.</td><td>Work is queued for investigation.</td></tr>
+        <tr><td>In Progress</td><td>Developer investigates and implements a fix.</td><td>Work is actively being addressed.</td></tr>
+        <tr><td>Resolved</td><td>Developer marks the issue ready for verification.</td><td>Bug appears in the tester retest queue.</td></tr>
+        <tr><td>Closed</td><td>Tester confirms the fix and closes the bug.</td><td>Issue is considered complete.</td></tr>
+        <tr><td>Reopened</td><td>Tester finds the issue persists and reopens it.</td><td>Bug returns to active work for another fix pass.</td></tr>
+      </tbody>
+    </table>
+    <div class="two-col">
+      <section class="panel">
+        <h3>Product capabilities in the current UI</h3>
+        <ul>
+          <li>Project lifecycle management and status controls.</li>
+          <li>User creation across three roles; developer department capture.</li>
+          <li>Bug intake with priority, team, developer assignment, URL, and image.</li>
+          <li>Search/filter bug lists and inspect full bug details.</li>
+          <li>Developer status updates and tester close/reopen retest outcomes.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h3>Decisions / gaps for product review</h3>
+        <ul>
+          <li><strong>User editing:</strong> UI exposes Edit, but the frontend reports that the update API is not implemented.</li>
+          <li><strong>Assignment governance:</strong> Tester currently chooses the developer at intake; confirm whether reassignment should be available later.</li>
+          <li><strong>Status ownership:</strong> Developer and tester transitions are role-specific; confirm permitted transitions and audit requirements.</li>
+          <li><strong>Notifications:</strong> No in-app/email notification flow is visible in the frontend.</li>
+          <li><strong>Project visibility:</strong> Confirm whether archived/finished projects should remain selectable for new bug reports.</li>
+        </ul>
+      </section>
+    </div>
+    <div class="callout">
+      <h3>Suggested acceptance checks</h3>
+      <p>Each bug has one identifiable project, priority, team, and assignee; only developers in the selected team can be assigned. A resolved bug appears in retest. Close removes it from retest; Reopen returns it to active work. Role-restricted routes do not expose another role's dashboard.</p>
+    </div>
+    <p class="small" style="margin-top: 3mm"><strong>Scope:</strong> Frontend implementation reviewed 03 October 2026; confirm backend rules with the API owner.</p>
+    <div class="footer"><span>Bug Tracker | Product workflow</span><span>03</span></div>
+  </section>
+</body>
+</html>

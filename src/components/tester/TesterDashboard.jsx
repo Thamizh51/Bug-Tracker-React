@@ -149,7 +149,7 @@ function BugImage({ src, alt, className }) {
 }
 
 const getBugUrl = (bug) => {
-    const raw = bug?.url || bug?.url;
+    const raw = bug?.url;
     if (typeof raw !== "string" || !raw.trim()) return null;
 
     const candidate = /^https?:\/\//i.test(raw.trim())
@@ -551,10 +551,10 @@ function TesterDashboard() {
             title: bug.title || "",
             description: bug.description || "",
             priority: bug.priority || "medium",
-            team: (getBugTeam(bug) || "frontend").toLowerCase(),
+            team: String(getAssignedTeam(bug, developers) || "frontend").toLowerCase(),
             assigned_to: bug.assigned_to ? String(bug.assigned_to) : "",
             image: null,
-            url: bug.url || bug.url || "",
+            url: bug.url || "",
         });
 
         setShowEditModal(true);
@@ -565,9 +565,12 @@ function TesterDashboard() {
             const detail = data.bug || data.data || data;
             setSelectedBug(detail);
 
-            const detailTeam = getBugTeam(detail);
+            const detailTeam = getAssignedTeam(detail, developers);
             if (detailTeam) {
-                setBugForm((previous) => ({ ...previous, team: detailTeam.toLowerCase() }));
+                setBugForm((previous) => ({
+                    ...previous,
+                    team: String(detailTeam).toLowerCase(),
+                }));
             }
         } catch {
             /* ignore */
@@ -652,8 +655,6 @@ function TesterDashboard() {
     /* Derived data                                                        */
     /* ------------------------------------------------------------------ */
 
-    // The API may not send `team` on the bug itself, so fall back to the
-    // assigned developer's team.
     const filteredBugs = useMemo(() => {
         const searchText = search.toLowerCase();
 
@@ -676,6 +677,7 @@ function TesterDashboard() {
     );
 
     const statistics = countStats(activePage === "project" ? bugs : allBugs);
+
     const projectGroups = useMemo(() => {
         const groupedProjects = new Map();
 
@@ -688,8 +690,10 @@ function TesterDashboard() {
             .sort(([firstStatus], [secondStatus]) => {
                 const firstOrder = PROJECT_STATUS_ORDER.indexOf(firstStatus);
                 const secondOrder = PROJECT_STATUS_ORDER.indexOf(secondStatus);
-                return (firstOrder < 0 ? PROJECT_STATUS_ORDER.length : firstOrder) -
-                    (secondOrder < 0 ? PROJECT_STATUS_ORDER.length : secondOrder);
+                return (
+                    (firstOrder < 0 ? PROJECT_STATUS_ORDER.length : firstOrder) -
+                    (secondOrder < 0 ? PROJECT_STATUS_ORDER.length : secondOrder)
+                );
             })
             .map(([status, items]) => ({ status, items }));
     }, [projects]);
@@ -802,7 +806,10 @@ function TesterDashboard() {
                                     )}
 
                                     <div className="retest-meta">
-                                        <span>Team: {formatAssignedTeam(getAssignedTeam(bug, developers))}</span>
+                                        <span>
+                                            Team:{" "}
+                                            {formatAssignedTeam(getAssignedTeam(bug, developers))}
+                                        </span>
                                         <span>
                                             Developer:{" "}
                                             {bug.assigned_to_name || bug.assigned_to || "Unassigned"}
@@ -928,7 +935,11 @@ function TesterDashboard() {
                                             </td>
 
                                             <td>
-                                                <span className="team-badge">{formatAssignedTeam(getAssignedTeam(bug, developers))}</span>
+                                                <span className="team-badge">
+                                                    {formatAssignedTeam(
+                                                        getAssignedTeam(bug, developers)
+                                                    )}
+                                                </span>
                                             </td>
 
                                             <td>
@@ -1073,6 +1084,7 @@ function TesterDashboard() {
                                     <span>{formatProjectStatus(status)}</span>
                                     <b>{items.length}</b>
                                 </div>
+
                                 {items.map((project) => (
                                     <button
                                         key={project.id}
@@ -1086,7 +1098,9 @@ function TesterDashboard() {
                                     >
                                         <span className="project-dot" />
                                         <span className="project-menu-name">{project.name}</span>
-                                        <span className={`project-status-chip project-status-${status}`}>
+                                        <span
+                                            className={`project-status-chip project-status-${status}`}
+                                        >
                                             {formatProjectStatus(status)}
                                         </span>
                                     </button>
@@ -1143,7 +1157,9 @@ function TesterDashboard() {
 
                             <div className="detail-item">
                                 <label>Assigned Team</label>
-                                <strong>{formatAssignedTeam(getAssignedTeam(selectedBug, developers))}</strong>
+                                <strong>
+                                    {formatAssignedTeam(getAssignedTeam(selectedBug, developers))}
+                                </strong>
                             </div>
 
                             <div className="detail-item">
@@ -1162,10 +1178,7 @@ function TesterDashboard() {
 
                             {getBugUrl(selectedBug) && (
                                 <div className="detail-item full">
-                                    <CopyField
-                                        label="Bug URL"
-                                        value={getBugUrl(selectedBug)}
-                                    />
+                                    <CopyField label="Bug URL" value={getBugUrl(selectedBug)} />
                                 </div>
                             )}
 

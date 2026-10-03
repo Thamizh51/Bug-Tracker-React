@@ -217,9 +217,9 @@
 
     border-radius: 8px;
 
-    background: transparent;
+    background: #fef2f2;
 
-    color: #6b7280;
+    color: #dc2626;
 
     text-align: left;
 
@@ -230,9 +230,9 @@
 
 
 .logout-nav:hover {
-    background: #fef2f2;
+    background: rgb(204, 36, 36);
 
-    color: #dc2626;
+    color: #ffffff;
 }
 
 
