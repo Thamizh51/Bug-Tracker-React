@@ -272,6 +272,7 @@ function TesterDashboard() {
     const [showViewModal, setShowViewModal] = useState(false);
 
     const [search, setSearch] = useState("");
+    const [projectSearch, setProjectSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
 
     const [toast, setToast] = useState(null);
@@ -631,6 +632,7 @@ function TesterDashboard() {
             showToast(error.message || "Retest failed", "error");
         }
     };
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
 
     const handleLogout = async () => {
         try {
@@ -678,10 +680,18 @@ function TesterDashboard() {
 
     const statistics = countStats(activePage === "project" ? bugs : allBugs);
 
+    const matchingProjects = useMemo(() => {
+        const searchText = projectSearch.trim().toLowerCase();
+
+        return projects.filter((project) =>
+            String(project.name || "").toLowerCase().includes(searchText)
+        );
+    }, [projects, projectSearch]);
+
     const projectGroups = useMemo(() => {
         const groupedProjects = new Map();
 
-        projects.forEach((project) => {
+        matchingProjects.forEach((project) => {
             const status = normalizeProjectStatus(project.status);
             groupedProjects.set(status, [...(groupedProjects.get(status) || []), project]);
         });
@@ -696,7 +706,7 @@ function TesterDashboard() {
                 );
             })
             .map(([status, items]) => ({ status, items }));
-    }, [projects]);
+    }, [matchingProjects]);
 
     /* ------------------------------------------------------------------ */
     /* Renderers                                                           */
@@ -741,7 +751,7 @@ function TesterDashboard() {
             <div className="dashboard-header">
                 <div>
                     <span className="eyebrow">TESTER DASHBOARD</span>
-                    <h1>Dashboard</h1>
+                    <h1>Hello {user.name},</h1>
                     <p>Overview of your projects and testing activity.</p>
                 </div>
             </div>
@@ -749,13 +759,6 @@ function TesterDashboard() {
             {renderStatistics()}
 
             <section className="dashboard-panels">
-                <div className="dashboard-panel">
-                    <h2>Projects</h2>
-                    <p>Select a project from the sidebar to manage its bugs.</p>
-                    <strong>{projects.length}</strong>
-                    <span>Available Projects</span>
-                </div>
-
                 <div className="dashboard-panel retest-panel">
                     <h2>Waiting for Retest</h2>
                     <p>Resolved bugs waiting for verification.</p>
@@ -763,6 +766,28 @@ function TesterDashboard() {
 
                     <button onClick={() => setActivePage("resolved")}>
                         View Resolved Bugs →
+                    </button>
+                </div>
+                <div className="dashboard-panel retest-panel">
+                    <h2>Search The Project</h2>
+                    <input
+                        className="search-field"
+                        type="text"
+                        placeholder="Search projects..."
+                        value={projectSearch}
+                        onChange={(e) => setProjectSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && matchingProjects.length > 0) {
+                                handleProjectSelect(matchingProjects[0]);
+                            }
+                        }}
+                    />
+
+                    <button
+                        onClick={() => handleProjectSelect(matchingProjects[0])}
+                        disabled={!projectSearch.trim() || matchingProjects.length === 0}
+                    >
+                        Go To The Project →
                     </button>
                 </div>
             </section>
@@ -907,7 +932,7 @@ function TesterDashboard() {
                                 <tr>
                                     <th>Bug</th>
                                     <th>Team</th>
-                                    <th>Developer</th>
+                                    <th>Assigned Developer</th>
                                     <th>Priority</th>
                                     <th>Status</th>
                                     <th>Actions</th>
@@ -928,9 +953,6 @@ function TesterDashboard() {
                                                 <div className="bug-name">
                                                     <strong>{bug.title}</strong>
                                                     <span>#{bug.id}</span>
-                                                    <small>
-                                                        {(bug.description || "").substring(0, 70)}
-                                                    </small>
                                                 </div>
                                             </td>
 
@@ -1077,6 +1099,8 @@ function TesterDashboard() {
                         <div className="sidebar-loading">Loading...</div>
                     ) : projects.length === 0 ? (
                         <div className="sidebar-loading">No projects</div>
+                    ) : projectGroups.length === 0 ? (
+                        <div className="sidebar-loading">No matching projects</div>
                     ) : (
                         projectGroups.map(({ status, items }) => (
                             <div className="project-group" key={status}>
