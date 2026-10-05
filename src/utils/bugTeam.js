@@ -58,4 +58,3 @@ export const formatAssignedTeam = (team) => {
         .replace(/[_-]+/g, " ")
         .replace(/\b\w/g, (character) => character.toUpperCase());
 };
-console.log("hello")
