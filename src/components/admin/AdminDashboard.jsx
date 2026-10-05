@@ -2115,6 +2115,7 @@ function AdminDashboard() {
                                                         <td>
 
                                                             <button
+                                                            style={{ borderRadius:'6px',border: "1px solid #3b82f6", background: "transparent", color: "#3b82f6", cursor: "pointer" }}
                                                                 type="button"
                                                                 className="action-view"
                                                                 onClick={() => {
