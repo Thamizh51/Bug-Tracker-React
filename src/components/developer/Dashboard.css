@@ -36,95 +36,113 @@
 
     /* Horizon UI Brand Colors */
 
-    \--primary:       #4318FF; /* brand.500 signature purple-indigo */
+    --primary: #4318FF;
+    /* brand.500 signature purple-indigo */
 
-    \--primary-dark:  #3311DB; /* brand.600 */
+    --primary-dark: #3311DB;
+    /* brand.600 */
 
-    \--primary-active: #2B0EB5; /* brand.700 */
+    --primary-active: #2B0EB5;
+    /* brand.700 */
 
-    \--primary-soft:  #F4F7FE; /* secondaryGray.300 */
+    --primary-soft: #F4F7FE;
+    /* secondaryGray.300 */
 
-    \--primary-mid:   #E9E3FF; /* brand.100 light pill */
+    --primary-mid: #E9E3FF;
+    /* brand.100 light pill */
 
-    \--primary-glow:  rgba(67, 24, 255, 0.2);
+    --primary-glow: rgba(67, 24, 255, 0.2);
 
 
 
     /* Horizon UI Typography */
 
-    \--text:          #1B2559; /* secondaryGray.900 main bold navy title */
+    --text: #1B2559;
+    /* secondaryGray.900 main bold navy title */
 
-    \--text-2:        #2B3674; /* navy.700 secondary dark navy */
+    --text-2: #2B3674;
+    /* navy.700 secondary dark navy */
 
-    \--text-3:        #A3AED0; /* secondaryGray.600 muted labels & captions */
+    --text-3: #A3AED0;
+    /* secondaryGray.600 muted labels & captions */
 
-    \--text-4:        #8F9BBA; /* secondaryGray.500 */
+    --text-4: #8F9BBA;
+    /* secondaryGray.500 */
 
 
 
     /* Horizon UI Borders */
 
-    \--border:        #E0E5F2; /* secondaryGray.100 */
+    --border: #E0E5F2;
+    /* secondaryGray.100 */
 
-    \--border-soft:   #F4F7FE;
+    --border-soft: #F4F7FE;
 
 
 
     /* Canvas & Surface */
 
-    \--bg:            #F4F7FE; /* Horizon signature canvas background */
+    --bg: #F4F7FE;
+    /* Horizon signature canvas background */
 
-    \--card:          #FFFFFF; /* White card surface */
+    --card: #FFFFFF;
+    /* White card surface */
 
 
 
     /* Horizon Status Accents */
 
-    \--pending:       #FFB547; /* orange.500 */
+    --pending: #FFB547;
+    /* orange.500 */
 
-    \--progress:      #3965FF; /* blue.500 */
+    --progress: #3965FF;
+    /* blue.500 */
 
-    \--resolved:      #01B574; /* green.500 */
+    --resolved: #01B574;
+    /* green.500 */
 
-    \--reopened:      #EE5D50; /* red.500 */
+    --reopened: #EE5D50;
+    /* red.500 */
 
-    \--closed:        #8F9BBA; /* secondaryGray.500 */
+    --closed: #8F9BBA;
+    /* secondaryGray.500 */
 
 
 
     /* Horizon UI Shadows */
 
-    \--shadow-sm:     0px 4px 12px rgba(112, 144, 176, 0.08);
+    --shadow-sm: 0px 4px 12px rgba(112, 144, 176, 0.08);
 
-    \--shadow-card:   14px 17px 40px 4px rgba(112, 144, 176, 0.08);
+    --shadow-card: 14px 17px 40px 4px rgba(112, 144, 176, 0.08);
 
-    \--shadow-md:     14px 20px 40px 8px rgba(112, 144, 176, 0.14);
+    --shadow-md: 14px 20px 40px 8px rgba(112, 144, 176, 0.14);
 
-    \--shadow-modal:  0px 25px 60px rgba(112, 144, 176, 0.25);
+    --shadow-modal: 0px 25px 60px rgba(112, 144, 176, 0.25);
 
-    \--shadow-btn:    0px 4px 14px rgba(67, 24, 255, 0.25);
+    --shadow-btn: 0px 4px 14px rgba(67, 24, 255, 0.25);
 
 
 
     /* Radii */
 
-    \--radius-sm:     10px;
+    --radius-sm: 10px;
 
-    \--radius:        14px;
+    --radius: 14px;
 
-    \--radius-lg:     18px;
+    --radius-lg: 18px;
 
-    \--radius-xl:     20px; /* Horizon signature 20px card radius */
+    --radius-xl: 20px;
+    /* Horizon signature 20px card radius */
 
-    \--radius-pill:   30px;
+    --radius-pill: 30px;
 
 
 
-    \--font-sans:     "DM Sans", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-sans: "DM Sans", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-    \--letter-spacing: -0.5px;
+    --letter-spacing: -0.5px;
 
-    \--transition:    0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    --transition: 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 
 }
 
@@ -992,7 +1010,7 @@ textarea {
 
 
 
-.project-left > div:last-child {
+.project-left>div:last-child {
 
     min-width: 0;
 
@@ -2096,7 +2114,7 @@ tbody tr:hover {
 
 .copy-field label,
 
-.image-section > label {
+.image-section>label {
 
     display: block;
 
@@ -2696,15 +2714,25 @@ tbody tr:hover {
 
 
 
-.dot-pending { background: var(--pending); }
+.dot-pending {
+    background: var(--pending);
+}
 
-.dot-in_progress { background: var(--progress); }
+.dot-in_progress {
+    background: var(--progress);
+}
 
-.dot-resolved { background: var(--resolved); }
+.dot-resolved {
+    background: var(--resolved);
+}
 
-.dot-reopened { background: var(--reopened); }
+.dot-reopened {
+    background: var(--reopened);
+}
 
-.dot-closed { background: var(--closed); }
+.dot-closed {
+    background: var(--closed);
+}
 
 
 
@@ -2902,17 +2930,25 @@ tbody tr:hover {
 
 
 
-.toast-success .toast-progress { background: var(--resolved); }
+.toast-success .toast-progress {
+    background: var(--resolved);
+}
 
-.toast-error .toast-progress { background: var(--reopened); }
+.toast-error .toast-progress {
+    background: var(--reopened);
+}
 
 
 
 @keyframes toastProgress {
 
-    from { transform: scaleX(1); }
+    from {
+        transform: scaleX(1);
+    }
 
-    to   { transform: scaleX(0); }
+    to {
+        transform: scaleX(0);
+    }
 
 }
 
@@ -2980,9 +3016,13 @@ tbody tr:hover {
 
 @keyframes fadeIn {
 
-    from { opacity: 0; }
+    from {
+        opacity: 0;
+    }
 
-    to   { opacity: 1; }
+    to {
+        opacity: 1;
+    }
 
 }
 
@@ -2990,9 +3030,15 @@ tbody tr:hover {
 
 @keyframes modalUp {
 
-    from { opacity: 0; transform: translateY(18px) scale(0.97); }
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.97);
+    }
 
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 
 }
 
@@ -3000,9 +3046,15 @@ tbody tr:hover {
 
 @keyframes toastIn {
 
-    from { opacity: 0; transform: translateX(30px); }
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
 
-    to   { opacity: 1; transform: translateX(0); }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 
 }
 
@@ -3010,9 +3062,15 @@ tbody tr:hover {
 
 @keyframes menuUp {
 
-    from { opacity: 0; transform: translateY(6px); }
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
 
-    to   { opacity: 1; transform: translateY(0); }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 
 }
 
@@ -3020,9 +3078,15 @@ tbody tr:hover {
 
 @keyframes slideDown {
 
-    from { opacity: 0; transform: translateY(-8px); }
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
 
-    to   { opacity: 1; transform: translateY(0); }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 
 }
 
@@ -3030,7 +3094,9 @@ tbody tr:hover {
 
 @keyframes spin {
 
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 
 }
 
@@ -3302,11 +3368,20 @@ tbody tr:hover {
 
 
 
-.status.status-passed  { background: #ecfdf5; color: #059669; }
+.status.status-passed {
+    background: #ecfdf5;
+    color: #059669;
+}
 
-.status.status-failed  { background: #fef2f2; color: #dc2626; }
+.status.status-failed {
+    background: #fef2f2;
+    color: #dc2626;
+}
 
-.status.status-blocked { background: #fff7ed; color: #c2410c; }
+.status.status-blocked {
+    background: #fff7ed;
+    color: #c2410c;
+}
 
 
 
