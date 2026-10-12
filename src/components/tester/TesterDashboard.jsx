@@ -266,7 +266,7 @@ const EMPTY_TEST_CASE_FORM = {
 };
 
 function ActionIcon({ name }) {
-    const common = { width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+    const common = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
     if (name === "view") return <svg {...common}><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>;
     if (name === "edit") return <svg {...common}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>;
     return <svg {...common}><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>;
@@ -344,6 +344,9 @@ function TesterDashboard() {
                 Authorization: `Bearer ${token}`,
                 Accept: "application/json",
                 "ngrok-skip-browser-warning": "true",
+                ...(typeof options.body === "string"
+                    ? { "Content-Type": "application/json" }
+                    : {}),
                 ...(options.headers || {}),
             },
         });
@@ -494,7 +497,22 @@ function TesterDashboard() {
 
     const handleSaveTestCase = async (e) => {
         e.preventDefault();
-        if (!selectedProject) return;
+
+        if (!selectedProject) {
+            showToast("Please select a project first.", "error");
+            return;
+        }
+
+        const title = String(testCaseForm.title ?? "").trim();
+        if (!title) {
+            showToast("Title is required. Please enter a test case title.", "error");
+            return;
+        }
+
+        const payload = {
+            ...testCaseForm,
+            title,
+        };
 
         try {
             const path = editingTestCase
@@ -502,16 +520,30 @@ function TesterDashboard() {
                 : `/projects/${selectedProject.id}/create-test-case`;
             const method = editingTestCase ? "PUT" : "POST";
 
-            await request(path, {
+            console.debug("Saving test case", {
+                path,
                 method,
-                body: JSON.stringify(testCaseForm),
+                title: payload.title,
+                payload,
             });
 
-            showToast(editingTestCase ? "Test case updated successfully" : "Test case created successfully");
+            await request(path, {
+                method,
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            showToast(
+                editingTestCase
+                    ? "Test case updated successfully"
+                    : "Test case created successfully"
+            );
             closeTestCaseModal();
-            fetchProjectTestCases(selectedProject.id);
+            await fetchProjectTestCases(selectedProject.id);
         } catch (error) {
-            console.error(error);
+            console.error("Failed to save test case:", error);
             showToast(error.message || "Failed to save test case", "error");
         }
     };
