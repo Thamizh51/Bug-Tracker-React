@@ -6,6 +6,7 @@ function Login() {
     const navigate = useNavigate();
     const [error, setError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const API_URL = import.meta.env.VITE_API_BASE_URL;
 
     async function handleLogin(e) {
         e.preventDefault();
@@ -13,7 +14,7 @@ function Login() {
         setIsSubmitting(true);
 
         try {
-            const response = await fetch("http://localhost:8000/api/login", {
+            const response = await fetch(`${API_URL}/login`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -46,6 +47,7 @@ function Login() {
                 setError(data.message || "Unable to sign in. Check your credentials and try again.");
             }
         } catch {
+
             setError("Could not reach the server. Check your connection and try again.");
         } finally {
             setIsSubmitting(false);

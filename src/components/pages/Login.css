@@ -183,11 +183,9 @@ body {
     border: none;
     border-radius: 9px;
 
-    background: linear-gradient(
-        135deg,
-        #6366f1,
-        #4f46e5
-    );
+    background: linear-gradient(135deg,
+            #6366f1,
+            #4f46e5);
 
     color: #ffffff;
 
@@ -242,6 +240,7 @@ body {
 /* Background Animations */
 
 @keyframes floatOne {
+
     0%,
     100% {
         transform: translate(0, 0);
@@ -253,6 +252,7 @@ body {
 }
 
 @keyframes floatTwo {
+
     0%,
     100% {
         transform: translate(0, 0);
@@ -279,4 +279,3 @@ body {
         font-size: 26px;
     }
 }
-

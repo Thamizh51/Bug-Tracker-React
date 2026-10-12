@@ -250,6 +250,28 @@ function CopyField({ label, value }) {
     );
 }
 
+const EMPTY_TEST_CASE_FORM = {
+    title: "",
+    test_case_code: "",
+    module: "",
+    type: "functional",
+    priority: "medium",
+    severity: "medium",
+    status: "pending",
+    preconditions: "",
+    steps: "",
+    expected_result: "",
+    actual_result: "",
+    description: "",
+};
+
+function ActionIcon({ name }) {
+    const common = { width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+    if (name === "view") return <svg {...common}><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>;
+    if (name === "edit") return <svg {...common}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>;
+    return <svg {...common}><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>;
+}
+
 function TesterDashboard() {
     const navigate = useNavigate();
     const token = localStorage.getItem("token");
@@ -258,8 +280,19 @@ function TesterDashboard() {
 
     const [projects, setProjects] = useState([]);
     const [developers, setDevelopers] = useState([]);
-    const [bugs, setBugs] = useState([]); // bugs of the selected project
+    const [bugs, setBugs] = useState([]); // bugs of the selected project or test case
     const [allBugs, setAllBugs] = useState([]); // bugs of every project
+
+    const [testCases, setTestCases] = useState([]);
+    const [selectedTestCase, setSelectedTestCase] = useState(null);
+    const [loadingTestCases, setLoadingTestCases] = useState(false);
+    const [showTestCaseModal, setShowTestCaseModal] = useState(false);
+    const [editingTestCase, setEditingTestCase] = useState(null);
+    const [testCaseSearch, setTestCaseSearch] = useState("");
+    const [testCaseStatusFilter, setTestCaseStatusFilter] = useState("all");
+    const [testCaseTypeFilter, setTestCaseTypeFilter] = useState("all");
+    const [testCasePriorityFilter, setTestCasePriorityFilter] = useState("all");
+    const [testCaseForm, setTestCaseForm] = useState(EMPTY_TEST_CASE_FORM);
 
     const [selectedProject, setSelectedProject] = useState(null);
     const [selectedBug, setSelectedBug] = useState(null);
@@ -401,9 +434,136 @@ function TesterDashboard() {
         }
     };
 
+    const fetchProjectTestCases = async (projectId) => {
+        if (!projectId) return;
+        try {
+            setLoadingTestCases(true);
+            const data = await request(`/projects/${projectId}/test-cases`);
+            setTestCases(data.test_cases || data.data || []);
+        } catch (error) {
+            console.error(error);
+            showToast(error.message || "Failed to load test cases", "error");
+            setTestCases([]);
+        } finally {
+            setLoadingTestCases(false);
+        }
+    };
+
+    const fetchTestCaseBugs = async (testCaseId) => {
+        if (!testCaseId) return;
+        try {
+            setLoadingBugs(true);
+            const data = await request(`/test-cases/${testCaseId}/bugs`);
+            setBugs(data.bugs || data.data || []);
+        } catch (error) {
+            console.error(error);
+            showToast(error.message || "Failed to load test case bugs", "error");
+            setBugs([]);
+        } finally {
+            setLoadingBugs(false);
+        }
+    };
+
+    const openCreateTestCase = () => {
+        setEditingTestCase(null);
+        setTestCaseForm({
+            ...EMPTY_TEST_CASE_FORM,
+            test_case_code: `TC-${String((testCases.length || 0) + 1).padStart(3, "0")}`,
+        });
+        setShowTestCaseModal(true);
+    };
+
+    const openEditTestCase = (testCase) => {
+        setEditingTestCase(testCase);
+        setTestCaseForm({
+            title: testCase.title || "",
+            test_case_code: testCase.test_case_code || "",
+            module: testCase.module || "",
+            type: testCase.type || "functional",
+            priority: testCase.priority || "medium",
+            severity: testCase.severity || "medium",
+            status: testCase.status || "pending",
+            preconditions: testCase.preconditions || "",
+            steps: testCase.steps || "",
+            expected_result: testCase.expected_result || "",
+            actual_result: testCase.actual_result || "",
+            description: testCase.description || "",
+        });
+        setShowTestCaseModal(true);
+    };
+
+    const handleSaveTestCase = async (e) => {
+        e.preventDefault();
+        if (!selectedProject) return;
+
+        try {
+            const path = editingTestCase
+                ? `/test-cases/${editingTestCase.id}`
+                : `/projects/${selectedProject.id}/create-test-case`;
+            const method = editingTestCase ? "PUT" : "POST";
+
+            await request(path, {
+                method,
+                body: JSON.stringify(testCaseForm),
+            });
+
+            showToast(editingTestCase ? "Test case updated successfully" : "Test case created successfully");
+            closeTestCaseModal();
+            fetchProjectTestCases(selectedProject.id);
+        } catch (error) {
+            console.error(error);
+            showToast(error.message || "Failed to save test case", "error");
+        }
+    };
+
+    const closeTestCaseModal = () => {
+        setShowTestCaseModal(false);
+        setEditingTestCase(null);
+        setTestCaseForm(EMPTY_TEST_CASE_FORM);
+    };
+
+    const updateTestCaseStatus = async (testCase, newStatus) => {
+        try {
+            await request(`/test-cases/${testCase.id}`, {
+                method: "PUT",
+                body: JSON.stringify({ status: newStatus }),
+            });
+            showToast("Test case status updated");
+            setTestCases((prev) =>
+                prev.map((tc) => (tc.id === testCase.id ? { ...tc, status: newStatus } : tc))
+            );
+            if (selectedTestCase?.id === testCase.id) {
+                setSelectedTestCase((prev) => ({ ...prev, status: newStatus }));
+            }
+        } catch (error) {
+            showToast(error.message || "Failed to update test case status", "error");
+        }
+    };
+
+    const handleDeleteTestCase = async (testCase) => {
+        if (!window.confirm(`Are you sure you want to delete test case "${testCase.title}"?`)) return;
+
+        try {
+            await request(`/test-cases/${testCase.id}`, {
+                method: "DELETE",
+            });
+            showToast("Test case deleted successfully");
+            fetchProjectTestCases(selectedProject.id);
+        } catch (error) {
+            showToast(error.message || "Failed to delete test case", "error");
+        }
+    };
+
     // Refresh the current project's table and the global counts
     const refreshBugs = () => {
-        if (selectedProject) fetchProjectBugs(selectedProject.id);
+        if (selectedTestCase) {
+            fetchTestCaseBugs(selectedTestCase.id);
+        } else if (selectedProject) {
+            fetchProjectBugs(selectedProject.id);
+        }
+        if (selectedProject) {
+            fetchProjectTestCases(selectedProject.id);
+        }
         fetchAllBugs();
     };
 
@@ -434,6 +594,7 @@ function TesterDashboard() {
             setShowViewModal(false);
             setShowEditModal(false);
             setShowCreateModal(false);
+            closeTestCaseModal();
         };
 
         document.addEventListener("keydown", handleKey);
@@ -446,11 +607,31 @@ function TesterDashboard() {
 
     const handleProjectSelect = (project) => {
         setSelectedProject(project);
-        setActivePage("project");
+        setSelectedTestCase(null);
+        setActivePage("project-testcases");
+        setTestCaseSearch("");
+        setTestCaseStatusFilter("all");
+        setTestCaseTypeFilter("all");
+        setTestCasePriorityFilter("all");
+        setBugs([]);
+        fetchProjectTestCases(project.id);
+    };
+
+    const handleTestCaseSelect = (testCase) => {
+        setSelectedTestCase(testCase);
+        setActivePage("testcase-bugs");
         setSearch("");
         setStatusFilter("all");
         setBugs([]);
-        fetchProjectBugs(project.id); // always fetches, even for same project
+        fetchTestCaseBugs(testCase.id);
+    };
+
+    const handleBackToTestCases = () => {
+        setSelectedTestCase(null);
+        setActivePage("project-testcases");
+        if (selectedProject) {
+            fetchProjectTestCases(selectedProject.id);
+        }
     };
 
     /* ------------------------------------------------------------------ */
@@ -494,6 +675,10 @@ function TesterDashboard() {
         formData.append("priority", bugForm.priority);
         formData.append("team", bugForm.team);
         formData.append("assigned_to", bugForm.assigned_to); // developer ID
+
+        if (selectedTestCase?.id) {
+            formData.append("test_case_id", selectedTestCase.id);
+        }
 
         if (bugForm.url) formData.append("url", bugForm.url);
         if (bugForm.image) formData.append("image", bugForm.image);
@@ -657,6 +842,39 @@ function TesterDashboard() {
     /* Derived data                                                        */
     /* ------------------------------------------------------------------ */
 
+    const filteredTestCases = useMemo(() => {
+        const text = testCaseSearch.trim().toLowerCase();
+        return testCases.filter((tc) => {
+            const matchesSearch =
+                !text ||
+                String(tc.title || "").toLowerCase().includes(text) ||
+                String(tc.test_case_code || "").toLowerCase().includes(text) ||
+                String(tc.module || "").toLowerCase().includes(text) ||
+                String(tc.description || "").toLowerCase().includes(text);
+
+            const matchesStatus =
+                testCaseStatusFilter === "all" || tc.status === testCaseStatusFilter;
+
+            const matchesType =
+                testCaseTypeFilter === "all" || tc.type === testCaseTypeFilter;
+
+            const matchesPriority =
+                testCasePriorityFilter === "all" || tc.priority === testCasePriorityFilter;
+
+            return matchesSearch && matchesStatus && matchesType && matchesPriority;
+        });
+    }, [testCases, testCaseSearch, testCaseStatusFilter, testCaseTypeFilter, testCasePriorityFilter]);
+
+    const testCaseStats = useMemo(() => {
+        return {
+            total: testCases.length,
+            passed: testCases.filter((tc) => tc.status === "passed").length,
+            failed: testCases.filter((tc) => tc.status === "failed").length,
+            blocked: testCases.filter((tc) => tc.status === "blocked").length,
+            pending: testCases.filter((tc) => tc.status === "pending" || !tc.status).length,
+        };
+    }, [testCases]);
+
     const filteredBugs = useMemo(() => {
         const searchText = search.toLowerCase();
 
@@ -678,7 +896,7 @@ function TesterDashboard() {
         [allBugs]
     );
 
-    const statistics = countStats(activePage === "project" ? bugs : allBugs);
+    const statistics = countStats(activePage === "project" || activePage === "testcase-bugs" ? bugs : allBugs);
 
     const matchingProjects = useMemo(() => {
         const searchText = projectSearch.trim().toLowerCase();
@@ -865,13 +1083,245 @@ function TesterDashboard() {
         </>
     );
 
-    const renderProject = () => (
+    const renderTestCaseStats = () => (
+        <section className="statistics testcase-statistics">
+            <div className="stat-card">
+                <span>Total Test Cases</span>
+                <strong>{testCaseStats.total}</strong>
+            </div>
+
+            <div className="stat-card stat-card-passed">
+                <span>Passed</span>
+                <strong>{testCaseStats.passed}</strong>
+            </div>
+
+            <div className="stat-card stat-card-failed">
+                <span>Failed</span>
+                <strong>{testCaseStats.failed}</strong>
+            </div>
+
+            <div className="stat-card stat-card-blocked">
+                <span>Blocked</span>
+                <strong>{testCaseStats.blocked}</strong>
+            </div>
+
+            <div className="stat-card pending">
+                <span>Pending</span>
+                <strong>{testCaseStats.pending}</strong>
+            </div>
+        </section>
+    );
+
+    const renderProjectTestCases = () => (
         <>
             <div className="dashboard-header">
                 <div>
-                    <span className="eyebrow">PROJECT</span>
+                    <span className="eyebrow">PROJECT TEST SUITE</span>
                     <h1>{selectedProject?.name}</h1>
-                    <p>Manage bugs for this project.</p>
+                    <p>Manage test cases and verify feature requirements.</p>
+                </div>
+
+                <button
+                    className="create-button"
+                    onClick={openCreateTestCase}
+                >
+                    + Create Test Case
+                </button>
+            </div>
+
+            {renderTestCaseStats()}
+
+            <section className="bugs-section testcases-section">
+                <div className="bugs-header">
+                    <div>
+                        <div className="table-header-title-wrap">
+                            <h2>Test Cases</h2>
+                            <span className="table-badge">{testCases.length} test cases</span>
+                        </div>
+                        <p>Click any test case or "View Bugs" to see defects reported for it.</p>
+                    </div>
+
+                    <div className="filters">
+                        <div className="search-box">
+                            🔎
+                            <input
+                                type="text"
+                                placeholder="Search test cases..."
+                                value={testCaseSearch}
+                                onChange={(e) => setTestCaseSearch(e.target.value)}
+                            />
+                        </div>
+
+                        <select
+                            value={testCaseStatusFilter}
+                            onChange={(e) => setTestCaseStatusFilter(e.target.value)}
+                        >
+                            <option value="all">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="passed">Passed</option>
+                            <option value="failed">Failed</option>
+                            <option value="blocked">Blocked</option>
+                        </select>
+
+                        <select
+                            value={testCaseTypeFilter}
+                            onChange={(e) => setTestCaseTypeFilter(e.target.value)}
+                        >
+                            <option value="all">All Types</option>
+                            <option value="functional">Functional</option>
+                            <option value="ui">UI</option>
+                            <option value="regression">Regression</option>
+                            <option value="smoke">Smoke</option>
+                            <option value="integration">Integration</option>
+                            <option value="performance">Performance</option>
+                            <option value="security">Security</option>
+                        </select>
+
+                        <select
+                            value={testCasePriorityFilter}
+                            onChange={(e) => setTestCasePriorityFilter(e.target.value)}
+                        >
+                            <option value="all">All Priority</option>
+                            <option value="urgent">Urgent</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                </div>
+
+                {loadingTestCases ? (
+                    <div className="loading">
+                        <div className="spinner" />
+                        Loading test cases...
+                    </div>
+                ) : (
+                    <div className="bug-table-wrapper">
+                        <table className="bug-table testcase-table">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Title & Details</th>
+                                    <th>Module</th>
+                                    <th>Type</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Bugs</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredTestCases.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="8" className="empty-table">
+                                            No test cases found for this project.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredTestCases.map((tc) => (
+                                        <tr
+                                            key={tc.id}
+                                            className="tester-clickable-row"
+                                            onClick={() => handleTestCaseSelect(tc)}
+                                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleTestCaseSelect(tc); } }}
+                                            tabIndex={0}
+                                            role="button"
+                                            aria-label={`View bugs for test case ${tc.title}`}
+                                        >
+                                            <td>
+                                                <span
+                                                    className="tc-code-pill"
+                                                    title="Click row to view bugs in this test case"
+                                                >
+                                                    {tc.test_case_code || `TC-${tc.id}`}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div
+                                                    className="bug-name"
+                                                    title="Click row to view bugs in this test case"
+                                                >
+                                                    <strong>{tc.title}</strong>
+                                                    <span>{tc.description || tc.expected_result || "No description"}</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className="tc-module-tag">{tc.module || "General"}</span>
+                                            </td>
+                                            <td>
+                                                <span className="tc-type-badge">{tc.type || "functional"}</span>
+                                            </td>
+                                            <td>
+                                                <span className={`priority priority-${tc.priority || "medium"}`}>
+                                                    {tc.priority || "medium"}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <select
+                                                    className={`status-select tc-status-select status-${tc.status || "pending"}`}
+                                                    value={tc.status || "pending"}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onChange={(e) => updateTestCaseStatus(tc, e.target.value)}
+                                                >
+                                                    <option value="pending">Pending</option>
+                                                    <option value="in_progress">In Progress</option>
+                                                    <option value="passed">Passed</option>
+                                                    <option value="failed">Failed</option>
+                                                    <option value="blocked">Blocked</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <button
+                                                    className="tc-bugs-count-btn"
+                                                    onClick={(e) => { e.stopPropagation(); handleTestCaseSelect(tc); }}
+                                                    title="View bugs for this test case"
+                                                >
+                                                    <span className="tc-bugs-num">{tc.bugs_count || 0}</span>
+                                                    bugs
+                                                </button>
+                                            </td>
+                                            <td>
+                                                <div className="action-buttons tester-icon-actions" onClick={(e) => e.stopPropagation()}>
+                                                    <button type="button" className="view-button icon-action-btn" onClick={() => handleTestCaseSelect(tc)} title="View bugs" aria-label="View bugs">
+                                                        <ActionIcon name="view" />
+                                                    </button>
+                                                    <button type="button" className="edit-button icon-action-btn" onClick={() => openEditTestCase(tc)} title="Edit test case" aria-label="Edit test case">
+                                                        <ActionIcon name="edit" />
+                                                    </button>
+                                                    <button type="button" className="delete-button icon-action-btn" onClick={() => handleDeleteTestCase(tc)} title="Delete test case" aria-label="Delete test case">
+                                                        <ActionIcon name="delete" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
+        </>
+    );
+
+    const renderTestCaseBugs = () => (
+        <>
+            <div className="dashboard-header">
+                <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                        <button
+                            className="tc-back-btn"
+                            onClick={handleBackToTestCases}
+                        >
+                            ← Back to Test Cases
+                        </button>
+                        <span className="eyebrow" style={{ margin: 0 }}>
+                            {selectedProject?.name} / {selectedTestCase?.test_case_code || "TEST CASE"}
+                        </span>
+                    </div>
+                    <h1>{selectedTestCase?.title}</h1>
+                    <p>Bugs linked to this test case.</p>
                 </div>
 
                 <button
@@ -882,8 +1332,52 @@ function TesterDashboard() {
                         setShowCreateModal(true);
                     }}
                 >
-                    + Create Bug
+                    + Report Bug
                 </button>
+            </div>
+
+            {/* Test Case Detail Banner Strip */}
+            <div className="tc-detail-strip">
+                <div className="tc-detail-item">
+                    <span className="tc-label">Module:</span>
+                    <strong>{selectedTestCase?.module || "General"}</strong>
+                </div>
+                <div className="tc-detail-item">
+                    <span className="tc-label">Type:</span>
+                    <span className="tc-type-badge">{selectedTestCase?.type || "functional"}</span>
+                </div>
+                <div className="tc-detail-item">
+                    <span className="tc-label">Priority:</span>
+                    <span className={`priority priority-${selectedTestCase?.priority || "medium"}`}>
+                        {selectedTestCase?.priority || "medium"}
+                    </span>
+                </div>
+                <div className="tc-detail-item">
+                    <span className="tc-label">Status:</span>
+                    <select
+                        className={`status-select tc-status-select status-${selectedTestCase?.status || "pending"}`}
+                        value={selectedTestCase?.status || "pending"}
+                        onChange={(e) => updateTestCaseStatus(selectedTestCase, e.target.value)}
+                    >
+                        <option value="pending">Pending</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="passed">Passed</option>
+                        <option value="failed">Failed</option>
+                        <option value="blocked">Blocked</option>
+                    </select>
+                </div>
+                {selectedTestCase?.steps && (
+                    <div className="tc-detail-item tc-detail-full">
+                        <span className="tc-label">Steps:</span>
+                        <p>{selectedTestCase.steps}</p>
+                    </div>
+                )}
+                {selectedTestCase?.expected_result && (
+                    <div className="tc-detail-item tc-detail-full">
+                        <span className="tc-label">Expected:</span>
+                        <p>{selectedTestCase.expected_result}</p>
+                    </div>
+                )}
             </div>
 
             {renderStatistics()}
@@ -891,8 +1385,11 @@ function TesterDashboard() {
             <section className="bugs-section">
                 <div className="bugs-header">
                     <div>
-                        <h2>Project Bugs</h2>
-                        <p>View and manage bugs for this project.</p>
+                        <div className="table-header-title-wrap">
+                            <h2>Test Case Bugs</h2>
+                            <span className="table-badge">{bugs.length} bugs</span>
+                        </div>
+                        <p>Manage and track all defects reported for this test case.</p>
                     </div>
 
                     <div className="filters">
@@ -943,12 +1440,20 @@ function TesterDashboard() {
                                 {filteredBugs.length === 0 ? (
                                     <tr>
                                         <td colSpan="6" className="empty-table">
-                                            No bugs found.
+                                            No bugs reported for this test case yet.
                                         </td>
                                     </tr>
                                 ) : (
                                     filteredBugs.map((bug) => (
-                                        <tr key={bug.id}>
+                                        <tr
+                                            key={bug.id}
+                                            className="tester-clickable-row"
+                                            onClick={() => openViewBug(bug)}
+                                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewBug(bug); } }}
+                                            tabIndex={0}
+                                            role="button"
+                                            aria-label={`View bug ${bug.title}`}
+                                        >
                                             <td>
                                                 <div className="bug-name">
                                                     <strong>{bug.title}</strong>
@@ -978,31 +1483,21 @@ function TesterDashboard() {
 
                                             <td>
                                                 <span className={`status-badge status-${bug.status}`}>
+                                                    <span className="badge-dot" />
                                                     {bug.status}
                                                 </span>
                                             </td>
 
                                             <td>
-                                                <div className="action-buttons">
-                                                    <button
-                                                        className="view-button"
-                                                        onClick={() => openViewBug(bug)}
-                                                    >
-                                                        View
+                                                <div className="action-buttons tester-icon-actions" onClick={(e) => e.stopPropagation()}>
+                                                    <button type="button" className="view-button icon-action-btn" onClick={() => openViewBug(bug)} title="View bug" aria-label="View bug">
+                                                        <ActionIcon name="view" />
                                                     </button>
-
-                                                    <button
-                                                        className="edit-button"
-                                                        onClick={() => openEditModal(bug)}
-                                                    >
-                                                        Edit
+                                                    <button type="button" className="edit-button icon-action-btn" onClick={() => openEditModal(bug)} title="Edit bug" aria-label="Edit bug">
+                                                        <ActionIcon name="edit" />
                                                     </button>
-
-                                                    <button
-                                                        className="delete-button"
-                                                        onClick={() => handleDeleteBug(bug.id)}
-                                                    >
-                                                        Delete
+                                                    <button type="button" className="delete-button icon-action-btn" onClick={() => handleDeleteBug(bug.id)} title="Delete bug" aria-label="Delete bug">
+                                                        <ActionIcon name="delete" />
                                                     </button>
                                                 </div>
                                             </td>
@@ -1076,8 +1571,8 @@ function TesterDashboard() {
                             setBugs([]);
                         }}
                     >
-                        <span>⌂</span>
-                        Dashboard
+                        <span className="nav-icon">⌂</span>
+                        <span className="nav-text">Dashboard</span>
                     </button>
 
                     <button
@@ -1086,21 +1581,24 @@ function TesterDashboard() {
                         }`}
                         onClick={() => setActivePage("resolved")}
                     >
-                        <span>✓</span>
-                        Resolved Bugs
+                        <span className="nav-icon">✓</span>
+                        <span className="nav-text">Resolved Bugs</span>
                         {resolvedBugs.length > 0 && <b>{resolvedBugs.length}</b>}
                     </button>
                 </nav>
 
                 <div className="sidebar-section">
-                    <p>PROJECTS</p>
+                    <div className="sidebar-section-header">
+                        <span>Projects</span>
+                        {projects.length > 0 && <span className="sidebar-count">{projects.length}</span>}
+                    </div>
 
                     {loadingProjects ? (
-                        <div className="sidebar-loading">Loading...</div>
+                        <div className="sidebar-loading">Loading projects...</div>
                     ) : projects.length === 0 ? (
-                        <div className="sidebar-loading">No projects</div>
+                        <div className="sidebar-empty">No projects available</div>
                     ) : projectGroups.length === 0 ? (
-                        <div className="sidebar-loading">No matching projects</div>
+                        <div className="sidebar-empty">No matching projects</div>
                     ) : (
                         projectGroups.map(({ status, items }) => (
                             <div className="project-group" key={status}>
@@ -1113,12 +1611,15 @@ function TesterDashboard() {
                                     <button
                                         key={project.id}
                                         className={`project-menu ${
-                                            activePage === "project" &&
+                                            (activePage === "project" ||
+                                                activePage === "project-testcases" ||
+                                                activePage === "testcase-bugs") &&
                                             selectedProject?.id === project.id
                                                 ? "active"
                                                 : ""
                                         }`}
                                         onClick={() => handleProjectSelect(project)}
+                                        title={project.name}
                                     >
                                         <span className="project-dot" />
                                         <span className="project-menu-name">{project.name}</span>
@@ -1134,16 +1635,30 @@ function TesterDashboard() {
                     )}
                 </div>
 
-                <button className="logout-button" onClick={handleLogout}>
-                    ⇥ Logout
-                </button>
+                <div className="sidebar-footer">
+                    <div className="sidebar-user-pill">
+                        <div className="avatar">
+                            {user.name ? user.name.charAt(0).toUpperCase() : "T"}
+                        </div>
+                        <div className="user-info">
+                            <strong>{user.name || "Tester"}</strong>
+                            <span>{user.role ? user.role.toUpperCase() : "TESTER"}</span>
+                        </div>
+                    </div>
+
+                    <button className="logout-button" onClick={handleLogout} title="Logout">
+                        <span>⇥</span>
+                        <span>Logout</span>
+                    </button>
+                </div>
             </aside>
 
             {/* Main */}
             <main className="tester-main">
                 {activePage === "dashboard" && renderDashboard()}
                 {activePage === "resolved" && renderResolvedBugs()}
-                {activePage === "project" && selectedProject && renderProject()}
+                {(activePage === "project" || activePage === "project-testcases") && selectedProject && renderProjectTestCases()}
+                {activePage === "testcase-bugs" && selectedProject && selectedTestCase && renderTestCaseBugs()}
             </main>
 
             {/* VIEW BUG MODAL */}
@@ -1385,6 +1900,246 @@ function TesterDashboard() {
 
                                 <button type="submit" className="save-button">
                                     {showEditModal ? "Update Bug" : "Create Bug"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* CREATE / EDIT TEST CASE MODAL */}
+            {showTestCaseModal && (
+                <div className="modal-overlay" onClick={closeTestCaseModal}>
+                    <div className="bug-modal testcase-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div>
+                                <span>{editingTestCase ? "EDIT TEST CASE" : "NEW TEST CASE"}</span>
+                                <h2>
+                                    {editingTestCase
+                                        ? `Edit Test Case (${editingTestCase.test_case_code || "TC"})`
+                                        : "Create New Test Case"}
+                                </h2>
+                            </div>
+
+                            <button type="button" onClick={closeTestCaseModal}>
+                                ×
+                            </button>
+                        </div>
+
+                        <form className="bug-form" onSubmit={handleSaveTestCase}>
+                            <div className="form-row">
+                                <div className="form-field">
+                                    <label>Test Case Code</label>
+                                    <input
+                                        type="text"
+                                        value={testCaseForm.test_case_code}
+                                        onChange={(e) =>
+                                            setTestCaseForm({
+                                                ...testCaseForm,
+                                                test_case_code: e.target.value,
+                                            })
+                                        }
+                                        placeholder="e.g. TC-001"
+                                    />
+                                </div>
+
+                                <div className="form-field">
+                                    <label>Module / Feature</label>
+                                    <input
+                                        type="text"
+                                        value={testCaseForm.module}
+                                        onChange={(e) =>
+                                            setTestCaseForm({
+                                                ...testCaseForm,
+                                                module: e.target.value,
+                                            })
+                                        }
+                                        placeholder="e.g. Auth, Dashboard"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-field">
+                                <label>Title *</label>
+                                <input
+                                    type="text"
+                                    value={testCaseForm.title}
+                                    onChange={(e) =>
+                                        setTestCaseForm({
+                                            ...testCaseForm,
+                                            title: e.target.value,
+                                        })
+                                    }
+                                    placeholder="Enter descriptive test case title"
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-row">
+                                <div className="form-field">
+                                    <label>Type *</label>
+                                    <select
+                                        value={testCaseForm.type}
+                                        onChange={(e) =>
+                                            setTestCaseForm({
+                                                ...testCaseForm,
+                                                type: e.target.value,
+                                            })
+                                        }
+                                    >
+                                        <option value="functional">Functional</option>
+                                        <option value="ui">UI / UX</option>
+                                        <option value="regression">Regression</option>
+                                        <option value="smoke">Smoke</option>
+                                        <option value="integration">Integration</option>
+                                        <option value="performance">Performance</option>
+                                        <option value="security">Security</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-field">
+                                    <label>Priority *</label>
+                                    <select
+                                        value={testCaseForm.priority}
+                                        onChange={(e) =>
+                                            setTestCaseForm({
+                                                ...testCaseForm,
+                                                priority: e.target.value,
+                                            })
+                                        }
+                                    >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="urgent">Urgent</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-field">
+                                    <label>Severity *</label>
+                                    <select
+                                        value={testCaseForm.severity}
+                                        onChange={(e) =>
+                                            setTestCaseForm({
+                                                ...testCaseForm,
+                                                severity: e.target.value,
+                                            })
+                                        }
+                                    >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="critical">Critical</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-field">
+                                    <label>Status *</label>
+                                    <select
+                                        value={testCaseForm.status}
+                                        onChange={(e) =>
+                                            setTestCaseForm({
+                                                ...testCaseForm,
+                                                status: e.target.value,
+                                            })
+                                        }
+                                    >
+                                        <option value="pending">Pending</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="passed">Passed</option>
+                                        <option value="failed">Failed</option>
+                                        <option value="blocked">Blocked</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="form-field">
+                                <label>Preconditions</label>
+                                <textarea
+                                    rows="2"
+                                    value={testCaseForm.preconditions}
+                                    onChange={(e) =>
+                                        setTestCaseForm({
+                                            ...testCaseForm,
+                                            preconditions: e.target.value,
+                                        })
+                                    }
+                                    placeholder="Prerequisites needed before executing test..."
+                                />
+                            </div>
+
+                            <div className="form-field">
+                                <label>Test Steps</label>
+                                <textarea
+                                    rows="3"
+                                    value={testCaseForm.steps}
+                                    onChange={(e) =>
+                                        setTestCaseForm({
+                                            ...testCaseForm,
+                                            steps: e.target.value,
+                                        })
+                                    }
+                                    placeholder="1. Step one&#10;2. Step two"
+                                />
+                            </div>
+
+                            <div className="form-row">
+                                <div className="form-field">
+                                    <label>Expected Result</label>
+                                    <textarea
+                                        rows="2"
+                                        value={testCaseForm.expected_result}
+                                        onChange={(e) =>
+                                            setTestCaseForm({
+                                                ...testCaseForm,
+                                                expected_result: e.target.value,
+                                            })
+                                        }
+                                        placeholder="Expected outcome..."
+                                    />
+                                </div>
+
+                                <div className="form-field">
+                                    <label>Actual Result</label>
+                                    <textarea
+                                        rows="2"
+                                        value={testCaseForm.actual_result}
+                                        onChange={(e) =>
+                                            setTestCaseForm({
+                                                ...testCaseForm,
+                                                actual_result: e.target.value,
+                                            })
+                                        }
+                                        placeholder="Actual outcome (if executed)..."
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-field">
+                                <label>Description / Notes</label>
+                                <textarea
+                                    rows="2"
+                                    value={testCaseForm.description}
+                                    onChange={(e) =>
+                                        setTestCaseForm({
+                                            ...testCaseForm,
+                                            description: e.target.value,
+                                        })
+                                    }
+                                    placeholder="Additional notes or criteria..."
+                                />
+                            </div>
+
+                            <div className="modal-actions">
+                                <button
+                                    type="button"
+                                    className="cancel-button"
+                                    onClick={closeTestCaseModal}
+                                >
+                                    Cancel
+                                </button>
+                                <button type="submit" className="save-button">
+                                    {editingTestCase ? "Save Changes" : "Create Test Case"}
                                 </button>
                             </div>
                         </form>

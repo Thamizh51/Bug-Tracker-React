@@ -1,1249 +1,3024 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+
 import { formatAssignedTeam, getAssignedTeam } from "../../utils/bugTeam";
+
 import "./Dashboard.css";
 
+
+
 const API_URL = "http://localhost:8000/api";
+
 const API_BASE = API_URL.replace(/\/api\/?$/, "");
 
+
+
 /* ========================================================================
+
    Helpers
+
 ======================================================================== */
+
+
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+
+
 // Open bugs first (critical -> low), closed bugs always at the bottom
+
 const sortBugs = (list) =>
+
     [...list].sort((a, b) => {
+
         const aClosed = normalizeStatus(a.status) === "closed" ? 1 : 0;
+
         const bClosed = normalizeStatus(b.status) === "closed" ? 1 : 0;
+
+
 
         if (aClosed !== bClosed) return aClosed - bClosed;
 
+
+
         const aPriority = PRIORITY_ORDER[a.priority?.toLowerCase()] ?? 4;
+
         const bPriority = PRIORITY_ORDER[b.priority?.toLowerCase()] ?? 4;
+
+
 
         if (aPriority !== bPriority) return aPriority - bPriority;
 
+
+
         return (Number(b.id) || 0) - (Number(a.id) || 0);
+
     });
 
+
+
 // Statuses a developer is allowed to set
+
 const STATUS_OPTIONS = [
+
     { value: "pending", label: "Pending" },
+
     { value: "in_progress", label: "In Progress" },
+
     { value: "resolved", label: "Resolved" },
+
 ];
 
+
+
 const parseJson = async (response) => {
+
     try {
+
         return await response.json();
+
     } catch {
+
         return {};
+
     }
+
 };
 
+
+
 const normalizeStatus = (status) =>
+
     (status || "").toString().toLowerCase().trim().replace(/\s+/g, "_");
 
+
+
 const formatStatus = (status) => {
+
     const value = normalizeStatus(status);
+
+
 
     if (!value) return "Unknown";
 
+
+
     return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
 };
 
+
+
 const getAssigneeName = (bug, currentUser) => {
+
     const assignedTo = bug?.assigned_to;
+
     const assignee =
+
         bug?.assignee ||
+
         bug?.developer ||
+
         bug?.assigned_developer ||
+
         (typeof assignedTo === "object" ? assignedTo : null);
+
     const assignedName =
+
         bug?.assigned_to_name ||
+
         assignee?.name ||
+
         (typeof assignedTo === "string" && Number.isNaN(Number(assignedTo))
+
             ? assignedTo
+
             : null);
+
+
 
     if (assignedName) return assignedName;
 
+
+
     const assignedId =
+
         bug?.assigned_to_id ??
+
         bug?.developer_id ??
+
         bug?.assignee_id ??
+
         assignee?.id ??
+
         (typeof assignedTo === "object" ? assignedTo?.id : assignedTo);
 
+
+
     return currentUser?.id != null && String(currentUser.id) === String(assignedId)
+
         ? currentUser.name || "—"
+
         : "—";
+
 };
 
+
+
 /*
+
  * Builds a working image URL from whatever the API returns:
+
  * - full URL            -> used as is (host fixed if it points to wrong server)
+
  * - "bugs/abc.png"      -> BASE/storage/bugs/abc.png
+
  * - "/storage/bugs/..." -> BASE/storage/bugs/...
+
  */
+
 const getImageUrl = (bug) => {
+
     const raw =
+
         bug?.image_url ||
+
         bug?.image ||
+
         bug?.image_path ||
+
         bug?.screenshot ||
+
         bug?.screenshot_url;
+
+
 
     if (!raw || typeof raw !== "string") return null;
 
+
+
     if (raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
 
+
+
     if (/^https?:\/\//i.test(raw)) {
+
         try {
+
             const url = new URL(raw);
 
+
+
             // APP_URL on backend may be wrong (localhost vs ngrok)
+
             if (url.pathname.startsWith("/storage")) {
+
                 return `${API_BASE}${url.pathname}${url.search}`;
+
             }
+
         } catch {
+
             /* fall through */
+
         }
 
+
+
         return raw;
+
     }
+
+
 
     const path = raw.replace(/^\/+/, "");
 
+
+
     return path.startsWith("storage/")
+
         ? `${API_BASE}/${path}`
+
         : `${API_BASE}/storage/${path}`;
+
 };
 
+
+
 /* ========================================================================
+
    BugImage — normal <img> first, then fetch() fallback (ngrok / CORS)
+
 ======================================================================== */
+
+
 
 function BugImage({ src, alt }) {
+
     const [mode, setMode] = useState("direct"); // direct | blob | failed
+
     const [blobUrl, setBlobUrl] = useState(null);
 
+
+
     useEffect(() => {
+
         setMode("direct");
+
         setBlobUrl(null);
+
     }, [src]);
 
+
+
     useEffect(() => {
+
         if (mode !== "blob" || !src) return;
 
+
+
         let cancelled = false;
+
         let created = null;
 
+
+
         fetch(src, { headers: { "ngrok-skip-browser-warning": "true" } })
+
             .then((res) => {
+
                 if (!res.ok) throw new Error("Image request failed");
+
                 return res.blob();
+
             })
+
             .then((blob) => {
+
                 if (cancelled) return;
+
                 if (!blob.type.startsWith("image/")) {
+
                     throw new Error("Not an image");
+
                 }
+
                 created = URL.createObjectURL(blob);
+
                 setBlobUrl(created);
+
             })
+
             .catch(() => {
+
                 if (!cancelled) setMode("failed");
+
             });
 
+
+
         return () => {
+
             cancelled = true;
+
             if (created) URL.revokeObjectURL(created);
+
         };
+
     }, [mode, src]);
 
+
+
     if (mode === "failed") {
+
         return (
+
             <div className="image-error">
+
                 <span>🖼</span>
+
                 <p>Image could not be loaded.</p>
+
                 <a href={src} target="_blank" rel="noopener noreferrer">
+
                     Open directly ↗
+
                 </a>
+
             </div>
+
         );
+
     }
+
+
 
     if (mode === "blob" && !blobUrl) {
+
         return (
+
             <div className="image-error">
+
                 <div className="loader small" />
+
             </div>
+
         );
+
     }
+
+
 
     return (
+
         <img
+
             src={mode === "blob" ? blobUrl : src}
+
             alt={alt}
+
             onError={() => setMode(mode === "direct" ? "blob" : "failed")}
+
         />
+
     );
+
 }
 
+
+
 /* ========================================================================
+
    CopyField — shows a URL with Copy + Open buttons
+
 ======================================================================== */
 
+
+
 const normalizeBugUrl = (value) => {
+
     if (typeof value !== "string" || !value.trim()) return null;
+
     const candidate = /^https?:\/\//i.test(value.trim())
+
         ? value.trim()
+
         : `https://${value.trim()}`;
 
+
+
     try {
+
         const parsed = new URL(candidate);
+
         return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : null;
+
     } catch {
+
         return null;
+
     }
+
 };
+
+
 
 const formatBugUrl = (value) => {
+
     try {
+
         const parsed = new URL(value);
+
         const path = parsed.pathname === "/" ? "" : parsed.pathname;
+
         const compact = `${parsed.host}${path}`;
+
         return compact.length > 52 ? `${compact.slice(0, 49)}...` : compact;
+
     } catch {
+
         return value;
+
     }
+
 };
 
+
+
 function CopyField({ label, value }) {
+
     const [copied, setCopied] = useState(false);
+
     const timer = useRef(null);
+
     const normalizedUrl = normalizeBugUrl(value);
+
     const copyValue = normalizedUrl || value;
+
+
 
     useEffect(() => () => clearTimeout(timer.current), []);
 
+
+
     const handleCopy = async () => {
+
         try {
+
             await navigator.clipboard.writeText(copyValue);
+
         } catch {
+
             // Fallback for non-secure contexts
+
             const area = document.createElement("textarea");
+
             area.value = copyValue;
+
             area.style.position = "fixed";
+
             area.style.opacity = "0";
+
             document.body.appendChild(area);
+
             area.select();
 
+
+
             try {
+
                 document.execCommand("copy");
+
             } catch {
+
                 /* ignore */
+
             }
+
+
 
             document.body.removeChild(area);
+
         }
 
+
+
         setCopied(true);
+
         clearTimeout(timer.current);
+
         timer.current = setTimeout(() => setCopied(false), 2000);
+
     };
 
+
+
     return (
+
         <div className="copy-field">
+
             <label>{label}</label>
 
+
+
             <div className="copy-row">
+
                 <span className="copy-url" title={copyValue}>
+
                     {normalizedUrl ? formatBugUrl(normalizedUrl) : value}
+
                 </span>
 
+
+
                 <button
+
                     type="button"
+
                     className={`copy-btn ${copied ? "copied" : ""}`}
+
                     onClick={handleCopy}
+
                 >
+
                     {copied ? "✓ Copied" : "⧉ Copy"}
+
                 </button>
 
+
+
                 {normalizedUrl && (
+
                     <a
+
                         className="open-btn"
+
                         href={normalizedUrl}
+
                         target="_blank"
+
                         rel="noopener noreferrer"
+
                     >
+
                         Open ↗
+
                     </a>
+
                 )}
+
             </div>
+
         </div>
+
     );
+
 }
 
+
+
 /* ========================================================================
+
    StatusDropdown — custom styled dropdown
+
 ======================================================================== */
 
+
+
 function StatusDropdown({ value, onChange, disabled }) {
+
     const [open, setOpen] = useState(false);
+
     const wrapperRef = useRef(null);
 
+
+
     useEffect(() => {
+
         const handleClick = (e) => {
+
             if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+
                 setOpen(false);
+
             }
+
         };
+
+
 
         const handleKey = (e) => {
+
             if (e.key === "Escape") setOpen(false);
+
         };
+
+
 
         document.addEventListener("mousedown", handleClick);
+
         document.addEventListener("keydown", handleKey);
 
+
+
         return () => {
+
             document.removeEventListener("mousedown", handleClick);
+
             document.removeEventListener("keydown", handleKey);
+
         };
+
     }, []);
+
+
 
     const current = normalizeStatus(value) || "pending";
 
+
+
     return (
+
         <div className={`dd ${open ? "open" : ""}`} ref={wrapperRef}>
+
             <button
+
                 type="button"
+
                 className="dd-trigger"
+
                 disabled={disabled}
+
                 aria-haspopup="listbox"
+
                 aria-expanded={open}
+
                 onClick={() => setOpen((previous) => !previous)}
+
             >
+
                 <span className="dd-left">
+
                     <i className={`dot dot-${current}`} />
+
                     {formatStatus(current)}
+
                 </span>
 
+
+
                 <span className="dd-caret">▾</span>
+
             </button>
 
+
+
             {open && (
+
                 <ul className="dd-menu" role="listbox">
+
                     {STATUS_OPTIONS.map((option) => (
+
                         <li key={option.value}>
+
                             <button
+
                                 type="button"
+
                                 role="option"
+
                                 aria-selected={option.value === current}
-                                className={`dd-option ${
-                                    option.value === current ? "selected" : ""
-                                }`}
+
+                                className={`dd-option ${option.value === current ? "selected" : ""
+
+                                    }`}
+
                                 onClick={() => {
+
                                     setOpen(false);
+
                                     onChange(option.value);
+
                                 }}
+
                             >
+
                                 <i className={`dot dot-${option.value}`} />
+
                                 <span>{option.label}</span>
 
+
+
                                 {option.value === current && (
+
                                     <b className="dd-check">✓</b>
+
                                 )}
+
                             </button>
+
                         </li>
+
                     ))}
+
                 </ul>
+
             )}
+
         </div>
+
+    );
+
+}
+
+
+
+/* ========================================================================
+
+   Dashboard
+
+======================================================================== */
+
+
+
+
+function ActionIcon({ name }) {
+    if (name === "view") {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2.5 12s3.4-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.4 6.5-9.5 6.5S2.5 12 2.5 12Z" />
+                <circle cx="12" cy="12" r="3" />
+            </svg>
+        );
+    }
+    if (name === "edit") {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+            </svg>
+        );
+    }
+    return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="m19 6-1 14H6L5 6" />
+            <path d="M10 10v6M14 10v6" />
+        </svg>
     );
 }
 
-/* ========================================================================
-   Dashboard
-======================================================================== */
-
 function Dashboard() {
+
     const token = localStorage.getItem("token");
+
+
 
     const [user, setUser] = useState(null);
 
+
+
     const [assignedBugs, setAssignedBugs] = useState([]);
+
     const [projects, setProjects] = useState([]);
 
+
+
     const [selectedProject, setSelectedProject] = useState(null);
+
     const [projectBugs, setProjectBugs] = useState([]);
+
     const [projectStatsBugs, setProjectStatsBugs] = useState([]);
+
+
 
     const [selectedBug, setSelectedBug] = useState(null);
 
+
+
     const [loading, setLoading] = useState(true);
+
     const [projectLoading, setProjectLoading] = useState(false);
+
     const [bugLoading, setBugLoading] = useState(false);
+
     const [statusUpdating, setStatusUpdating] = useState(false);
+
+
 
     const [error, setError] = useState("");
 
+
+
     const [search, setSearch] = useState("");
+
     const [projectSearch, setProjectSearch] = useState("");
+
     const [statusFilter, setStatusFilter] = useState("all");
+
     const [priorityFilter, setPriorityFilter] = useState("all");
 
+
+
     const [projectPage, setProjectPage] = useState(1);
+
     const [projectLastPage, setProjectLastPage] = useState(1);
+
+
+
+    const [testCases, setTestCases] = useState([]);
+
+    const [selectedTestCase, setSelectedTestCase] = useState(null);
+
+    const [testCasesLoading, setTestCasesLoading] = useState(false);
+
+    const [testCaseSearch, setTestCaseSearch] = useState("");
+
+    const [testCaseStatusFilter, setTestCaseStatusFilter] = useState("all");
+
+    const [testCaseTypeFilter, setTestCaseTypeFilter] = useState("all");
+
+    const [testCaseBugs, setTestCaseBugs] = useState([]);
+
+    const [testCaseBugsLoading, setTestCaseBugsLoading] = useState(false);
+
+
 
     const [toast, setToast] = useState(null);
 
+
+
     const toastTimer = useRef(null);
+
     const projectRequestId = useRef(0);
+
     const projectStatsRequestId = useRef(0);
+
     const bugRequestId = useRef(0);
+
     const bugsSectionRef = useRef(null);
 
-    /* ---------------------------------------------------------------- */
-    /* Toast                                                             */
+
+
     /* ---------------------------------------------------------------- */
 
+    /* Toast                                                             */
+
+    /* ---------------------------------------------------------------- */
+
+
+
     const showToast = (message, type = "success") => {
+
         clearTimeout(toastTimer.current);
+
         setToast({ id: Date.now(), message, type });
+
         toastTimer.current = setTimeout(() => setToast(null), 3000);
+
     };
+
+
 
     useEffect(() => () => clearTimeout(toastTimer.current), []);
 
+
+
     /* ---------------------------------------------------------------- */
+
     /* API helper                                                        */
+
     /* ---------------------------------------------------------------- */
+
+
 
     const clearSession = () => {
+
         localStorage.removeItem("token");
+
         localStorage.removeItem("user");
+
         window.location.href = "/";
+
     };
 
+
+
     const request = async (path, options = {}) => {
+
         const response = await fetch(`${API_URL}${path}`, {
+
             ...options,
+
             headers: {
+
                 Authorization: `Bearer ${token}`,
+
                 Accept: "application/json",
+
                 "Content-Type": "application/json",
+
                 "ngrok-skip-browser-warning": "true",
+
                 ...(options.headers || {}),
+
             },
+
         });
 
+
+
         if (response.status === 401) {
+
             clearSession();
+
             throw new Error("Session expired. Please log in again.");
+
         }
+
+
 
         const data = await parseJson(response);
 
+
+
         if (!response.ok) {
+
             throw new Error(data.message || "Request failed");
+
         }
+
+
 
         return data;
+
     };
 
-    /* ---------------------------------------------------------------- */
-    /* Initial load                                                      */
+
+
     /* ---------------------------------------------------------------- */
 
+    /* Initial load                                                      */
+
+    /* ---------------------------------------------------------------- */
+
+
+
     useEffect(() => {
+
         if (!token) {
+
             window.location.href = "/";
+
             return;
+
         }
+
+
 
         const savedUser = localStorage.getItem("user");
 
+
+
         if (savedUser) {
+
             try {
+
                 setUser(JSON.parse(savedUser));
+
             } catch {
+
                 console.log("Invalid user data");
+
             }
+
         }
+
+
 
         loadDashboard();
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, []);
 
+
+
     // Close modal with Escape
+
     useEffect(() => {
+
         if (!selectedBug) return;
 
+
+
         const handleKey = (e) => {
+
             if (e.key === "Escape") closeBug();
+
         };
 
+
+
         document.addEventListener("keydown", handleKey);
+
         return () => document.removeEventListener("keydown", handleKey);
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, [selectedBug]);
 
+
+
     async function loadDashboard() {
+
         try {
+
             setLoading(true);
+
             setError("");
+
+
 
             const [assignedData, projectsData] = await Promise.all([
+
                 request("/developer/assigned-bugs"),
+
                 request("/projects"),
+
             ]);
 
+
+
             const assigned = assignedData.bugs || assignedData.data || [];
+
             const projectList = projectsData.projects || projectsData.data || [];
 
+
+
             setAssignedBugs(Array.isArray(assigned) ? assigned : []);
+
             setProjects(Array.isArray(projectList) ? projectList : []);
+
         } catch (err) {
+
             console.error(err);
+
             setError("Unable to load dashboard.");
+
             showToast("Unable to load dashboard.", "error");
+
         } finally {
+
             setLoading(false);
+
         }
+
     }
 
-    /* ---------------------------------------------------------------- */
-    /* Project bugs                                                      */
+
+
     /* ---------------------------------------------------------------- */
 
-    async function loadProjectBugs(project, page = 1) {
-        const requestId = ++projectRequestId.current;
+    /* Project Test Cases & Bugs                                         */
 
-        if (page === 1) {
-            projectStatsRequestId.current++;
-            setProjectStatsBugs([]);
-        }
+    /* ---------------------------------------------------------------- */
+
+
+
+    async function selectProject(project) {
+
+        setSelectedProject(project);
+
+        setSelectedTestCase(null);
+
+        setTestCaseSearch("");
+
+        setTestCaseStatusFilter("all");
+
+        setTestCaseTypeFilter("all");
+
+        setTestCaseBugs([]);
+
+        closeBug();
+
+        loadProjectTestCases(project);
+
+    }
+
+
+
+    async function loadProjectTestCases(project) {
 
         try {
-            setProjectLoading(true);
+
+            setTestCasesLoading(true);
+
             setError("");
 
-            setSelectedProject(project);
+            const data = await request(`/projects/${project.id}/test-cases`);
+
+            const list = data.test_cases || data.data || [];
+
+            setTestCases(Array.isArray(list) ? list : []);
+
+        } catch (err) {
+
+            console.error(err);
+
+            setError("Unable to load project test cases.");
+
+            showToast("Unable to load project test cases.", "error");
+
+        } finally {
+
+            setTestCasesLoading(false);
+
+        }
+
+    }
+
+
+
+    async function loadTestCaseBugs(testCase) {
+
+        try {
+
+            setSelectedTestCase(testCase);
+
+            setTestCaseBugsLoading(true);
+
+            setError("");
+
             closeBug();
 
-            if (page === 1) {
-                setSearch("");
-                setStatusFilter("all");
-                setPriorityFilter("all");
-            }
+            setSearch("");
 
-            const data = await request(`/projects/${project.id}/bugs?page=${page}`);
+            setStatusFilter("all");
 
-            if (requestId !== projectRequestId.current) return; // stale
+            setPriorityFilter("all");
+
+            const data = await request(`/test-cases/${testCase.id}/bugs`);
 
             const list = data.bugs || data.data || [];
 
-            setProjectBugs(Array.isArray(list) ? list : []);
-            setProjectPage(data.current_page || data.meta?.current_page || page);
-            const lastPage = data.last_page || data.meta?.last_page || 1;
-            setProjectLastPage(lastPage);
+            setTestCaseBugs(Array.isArray(list) ? list : []);
+
+        } catch (err) {
+
+            console.error(err);
+
+            setError("Unable to load test case bugs.");
+
+            showToast("Unable to load test case bugs.", "error");
+
+        } finally {
+
+            setTestCaseBugsLoading(false);
+
+        }
+
+    }
+
+
+
+    async function loadProjectBugs(project, page = 1) {
+
+        const requestId = ++projectRequestId.current;
+
+
+
+        if (page === 1) {
+
+            projectStatsRequestId.current++;
+
+            setProjectStatsBugs([]);
+
+        }
+
+
+
+        try {
+
+            setProjectLoading(true);
+
+            setError("");
+
+
+
+            setSelectedProject(project);
+
+            closeBug();
+
+
 
             if (page === 1) {
+
+                setSearch("");
+
+                setStatusFilter("all");
+
+                setPriorityFilter("all");
+
+            }
+
+
+
+            const data = await request(`/projects/${project.id}/bugs?page=${page}`);
+
+
+
+            if (requestId !== projectRequestId.current) return; // stale
+
+
+
+            const list = data.bugs || data.data || [];
+
+
+
+            setProjectBugs(Array.isArray(list) ? list : []);
+
+            setProjectPage(data.current_page || data.meta?.current_page || page);
+
+            const lastPage = data.last_page || data.meta?.last_page || 1;
+
+            setProjectLastPage(lastPage);
+
+
+
+            if (page === 1) {
+
                 const statsRequestId = projectStatsRequestId.current;
+
                 const firstPage = Array.isArray(list) ? list : [];
+
                 setProjectStatsBugs(firstPage);
 
+
+
                 if (lastPage > 1) {
+
                     Promise.all(
+
                         Array.from({ length: lastPage - 1 }, (_, index) => index + 2).map(
+
                             async (pageNumber) => {
+
                                 try {
+
                                     const pageData = await request(
+
                                         `/projects/${project.id}/bugs?page=${pageNumber}`
+
                                     );
+
                                     const pageBugs = pageData.bugs || pageData.data || [];
+
                                     return Array.isArray(pageBugs) ? pageBugs : [];
+
                                 } catch (err) {
+
                                     console.error(err);
+
                                     return [];
+
                                 }
+
                             }
+
                         )
+
                     ).then((remainingPages) => {
+
                         if (statsRequestId === projectStatsRequestId.current) {
+
                             setProjectStatsBugs([firstPage, ...remainingPages].flat());
+
                         }
+
                     });
+
                 }
+
             }
+
         } catch (err) {
+
             console.error(err);
+
+
 
             if (requestId !== projectRequestId.current) return;
 
+
+
             setError("Unable to load project bugs.");
+
             showToast("Unable to load project bugs.", "error");
+
         } finally {
+
             if (requestId === projectRequestId.current) {
+
                 setProjectLoading(false);
+
             }
+
         }
+
     }
+
+
 
     function showAssignedBugs() {
+
         projectRequestId.current++;
+
         projectStatsRequestId.current++;
 
+
+
         setSelectedProject(null);
+
+        setSelectedTestCase(null);
+
         setProjectBugs([]);
+
         setProjectStatsBugs([]);
+
+        setTestCaseBugs([]);
+
         setProjectLoading(false);
+
         closeBug();
 
+
+
         setSearch("");
+
         setStatusFilter("all");
+
         setPriorityFilter("all");
+
     }
 
+
+
     /* ---------------------------------------------------------------- */
+
     /* Single bug                                                        */
+
     /* ---------------------------------------------------------------- */
+
+
 
     async function openBug(bug) {
+
         const requestId = ++bugRequestId.current;
 
+
+
         // Open immediately with the data we already have
+
         setSelectedBug(bug);
+
         setBugLoading(true);
 
+
+
         try {
+
             const data = await request(`/bugs/${bug.id}`);
+
+
 
             if (requestId !== bugRequestId.current) return; // closed / changed
 
+
+
             setSelectedBug((previous) => ({
+
                 ...bug,
+
                 ...(data.bug || data.data || data),
+
                 status: previous?.status ?? (data.bug || data.data || data).status,
+
             }));
+
         } catch (err) {
+
             console.error(err);
 
+
+
             if (requestId === bugRequestId.current) {
+
                 showToast("Some bug details could not be loaded.", "error");
+
             }
+
         } finally {
+
             if (requestId === bugRequestId.current) {
+
                 setBugLoading(false);
+
             }
+
         }
+
     }
+
+
 
     function closeBug() {
+
         bugRequestId.current++;
+
         setSelectedBug(null);
+
         setBugLoading(false);
+
     }
 
-    /* ---------------------------------------------------------------- */
-    /* Status update                                                     */
+
+
     /* ---------------------------------------------------------------- */
 
+    /* Status update                                                     */
+
+    /* ---------------------------------------------------------------- */
+
+
+
     async function updateBugStatus(status) {
+
         if (!selectedBug) return;
+
         if (status === normalizeStatus(selectedBug.status)) return;
+
+
 
         const bugId = selectedBug.id;
 
+
+
         try {
+
             setStatusUpdating(true);
 
+
+
             await request(`/bugs/${bugId}/status`, {
+
                 method: "PUT",
+
                 body: JSON.stringify({ status }),
+
             });
 
+
+
             const apply = (list) =>
+
                 list.map((bug) => (bug.id === bugId ? { ...bug, status } : bug));
 
+
+
             setSelectedBug((previous) =>
+
                 previous && previous.id === bugId ? { ...previous, status } : previous
+
             );
+
             setAssignedBugs(apply);
+
             setProjectBugs(apply);
 
+            setTestCaseBugs(apply);
+
+
+
             showToast(`Bug #${bugId} status updated to ${formatStatus(status)}.`);
+
         } catch (err) {
+
             console.error(err);
+
             showToast(err.message || "Unable to update bug status.", "error");
+
         } finally {
+
             setStatusUpdating(false);
+
         }
+
     }
 
+
+
     /* ---------------------------------------------------------------- */
+
     /* Derived data                                                      */
+
     /* ---------------------------------------------------------------- */
+
+
 
     const displayedBugs = useMemo(() => {
-        const source = selectedProject ? projectBugs : assignedBugs;
+
+        const source = selectedTestCase ? testCaseBugs : (selectedProject ? projectBugs : assignedBugs);
+
         const searchText = search.toLowerCase();
 
+
+
         const filtered = source.filter((bug) => {
+
             const title = bug.title || bug.name || "";
+
             const description = bug.description || "";
 
+
+
             const matchesSearch =
+
                 title.toLowerCase().includes(searchText) ||
+
                 description.toLowerCase().includes(searchText) ||
+
                 String(bug.id).includes(searchText);
 
+
+
             const matchesStatus =
+
                 statusFilter === "all" || normalizeStatus(bug.status) === statusFilter;
 
+
+
             const matchesPriority =
+
                 priorityFilter === "all" ||
+
                 bug.priority?.toLowerCase() === priorityFilter;
 
+
+
             return matchesSearch && matchesStatus && matchesPriority;
+
         });
 
+
+
         return sortBugs(filtered);
+
     }, [
+
         assignedBugs,
+
         projectBugs,
+
+        testCaseBugs,
+
         selectedProject,
+
+        selectedTestCase,
+
         search,
+
         statusFilter,
+
         priorityFilter,
+
     ]);
 
-    const statsBugs = selectedProject ? projectStatsBugs : assignedBugs;
+
+
+    const filteredTestCases = useMemo(() => {
+
+        const text = testCaseSearch.trim().toLowerCase();
+
+        return testCases.filter((tc) => {
+
+            const matchesSearch =
+
+                !text ||
+
+                String(tc.title || "").toLowerCase().includes(text) ||
+
+                String(tc.test_case_code || "").toLowerCase().includes(text) ||
+
+                String(tc.module || "").toLowerCase().includes(text) ||
+
+                String(tc.description || "").toLowerCase().includes(text);
+
+
+
+            const matchesStatus =
+
+                testCaseStatusFilter === "all" || tc.status === testCaseStatusFilter;
+
+
+
+            const matchesType =
+
+                testCaseTypeFilter === "all" || tc.type === testCaseTypeFilter;
+
+
+
+            return matchesSearch && matchesStatus && matchesType;
+
+        });
+
+    }, [testCases, testCaseSearch, testCaseStatusFilter, testCaseTypeFilter]);
+
+
+
+    const testCaseStats = useMemo(() => {
+
+        return {
+
+            total: testCases.length,
+
+            passed: testCases.filter((tc) => tc.status === "passed").length,
+
+            failed: testCases.filter((tc) => tc.status === "failed").length,
+
+            blocked: testCases.filter((tc) => tc.status === "blocked").length,
+
+            pending: testCases.filter((tc) => tc.status === "pending" || !tc.status).length,
+
+        };
+
+    }, [testCases]);
+
+
+
+    const statsBugs = selectedTestCase ? testCaseBugs : (selectedProject ? projectStatsBugs : assignedBugs);
+
     const countByStatus = (status) =>
+
         statsBugs.filter((bug) => normalizeStatus(bug.status) === status).length;
 
+
+
     const filteredProjects = useMemo(() => {
+
         const searchText = projectSearch.trim().toLowerCase();
+
         return projects.filter((project) =>
+
             String(project.name || "").toLowerCase().includes(searchText)
+
         );
+
     }, [projects, projectSearch]);
 
-    const stats = [
-        { label: selectedProject ? "Project Bugs" : "Assigned Bugs", value: statsBugs.length, icon: "#", tone: "total", filter: "all" },
+
+
+    const stats = selectedProject && !selectedTestCase ? [
+
+        { label: "Total Test Cases", value: testCaseStats.total, icon: "#", tone: "total", filter: "all", isTc: true },
+
+        { label: "Passed", value: testCaseStats.passed, icon: "✓", tone: "resolved", filter: "passed", isTc: true },
+
+        { label: "Failed", value: testCaseStats.failed, icon: "!", tone: "pending", filter: "failed", isTc: true },
+
+        { label: "Blocked", value: testCaseStats.blocked, icon: "↺", tone: "reopened", filter: "blocked", isTc: true },
+
+        { label: "Pending", value: testCaseStats.pending, icon: "↻", tone: "progress", filter: "pending", isTc: true },
+
+    ] : [
+
+        { label: selectedTestCase ? "Test Case Bugs" : (selectedProject ? "Project Bugs" : "Assigned Bugs"), value: statsBugs.length, icon: "#", tone: "total", filter: "all" },
+
         { label: "Pending", value: countByStatus("pending"), icon: "!", tone: "pending", filter: "pending" },
+
         { label: "In Progress", value: countByStatus("in_progress"), icon: "↻", tone: "progress", filter: "in_progress" },
+
         { label: "Reopened", value: countByStatus("reopened"), icon: "↺", tone: "reopened", filter: "reopened" },
+
         { label: "Resolved", value: countByStatus("resolved"), icon: "✓", tone: "resolved", filter: "resolved" },
+
     ];
 
+
+
     // Clicking a card filters bugs in the current project or assigned-bugs view
-    const handleStatClick = (filter) => {
-        setStatusFilter(filter);
+
+    const handleStatClick = (stat) => {
+
+        if (stat.isTc) {
+
+            setTestCaseStatusFilter(stat.filter);
+
+        } else {
+
+            setStatusFilter(stat.filter);
+
+        }
+
+
 
         setTimeout(() => {
+
             bugsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
         }, 50);
+
     };
 
+
+
     /* ---------------------------------------------------------------- */
+
     /* Logout                                                            */
+
     /* ---------------------------------------------------------------- */
+
+
 
     async function handleLogout() {
+
         try {
+
             if (token) {
+
                 await fetch(`${API_URL}/logout`, {
+
                     method: "POST",
+
                     headers: {
+
                         Authorization: `Bearer ${token}`,
+
                         Accept: "application/json",
+
                     },
+
                 });
+
             }
+
         } catch (err) {
+
             console.error("Logout request failed:", err);
+
         } finally {
+
             clearSession();
+
         }
+
     }
 
+
+
     /* ---------------------------------------------------------------- */
+
     /* Loading                                                           */
+
     /* ---------------------------------------------------------------- */
+
+
 
     if (loading) {
+
         return (
+
             <div className="dashboard-loading">
+
                 <div className="loader" />
+
                 <p>Loading developer dashboard...</p>
+
             </div>
+
         );
+
     }
 
+
+
     const imageUrl = selectedBug ? getImageUrl(selectedBug) : null;
+
     const selectedStatus = normalizeStatus(selectedBug?.status);
 
+
+
     return (
+
         <div className="dashboard">
+
             {/* HEADER */}
+
             <header className="topbar">
+
                 <div className="topbar-left">
+
                     <div className="brand-icon">B</div>
 
+
+
                     <div>
+
                         <h1>Developer Dashboard</h1>
+
                         <p>Track and update the bugs assigned to you</p>
+
                     </div>
+
                 </div>
+
+
 
                 <div className="topbar-right">
+
                     <div className="user-chip">
+
                         <div className="developer-avatar">
+
                             {(user?.name || "D").charAt(0).toUpperCase()}
+
                         </div>
+
+
 
                         <div className="user-chip-text">
+
                             <strong>{user?.name || "Developer"}</strong>
+
                             <span>Developer</span>
+
                         </div>
+
                     </div>
 
+
+
                     <button className="logout-button" onClick={handleLogout}>
+
                         Logout
+
                     </button>
+
                 </div>
+
             </header>
+
+
 
             {error && <div className="alert error-alert">{error}</div>}
 
+
+
             {/* STATISTICS */}
+
             <section className="stats-container">
+
                 {stats.map((stat) => {
-                    const active = statusFilter === stat.filter;
+
+                    const active = stat.isTc
+
+                        ? testCaseStatusFilter === stat.filter
+
+                        : statusFilter === stat.filter;
+
+
 
                     return (
+
                         <button
+
                             type="button"
+
                             key={stat.label}
+
                             className={`stat-card ${active ? "active" : ""}`}
-                            onClick={() => handleStatClick(stat.filter)}
+
+                            onClick={() => handleStatClick(stat)}
+
                             title={`Show ${stat.label.toLowerCase()}`}
+
                         >
+
                             <div className={`stat-icon ${stat.tone}`}>{stat.icon}</div>
 
+
+
                             <div>
+
                                 <span>{stat.label}</span>
+
                                 <strong>{stat.value}</strong>
+
                             </div>
+
                         </button>
+
                     );
+
                 })}
+
             </section>
 
+
+
             <div className="dashboard-layout">
+
                 {/* SIDEBAR */}
+
                 <aside className="projects-sidebar">
+
                     <button
+
                         className={`project-item ${selectedProject === null ? "active" : ""}`}
+
                         onClick={showAssignedBugs}
+
                     >
+
                         <div className="project-left">
+
                             <div className="project-icon">✓</div>
 
+
+
                             <div>
+
                                 <strong >My Assigned Bugs</strong>
+
                                 <small>Bugs assigned to me</small>
+
                             </div>
+
                         </div>
+
+
 
                         <span className="bug-count">{assignedBugs.length}</span>
+
                     </button>
+
+
 
                     <div className="sidebar-heading">
+
                         <h2>Projects</h2>
+
                         <span>{projects.length} projects</span>
+
                     </div>
+
+
 
                     <div className="project-search">
+
                         <span aria-hidden="true">⌕</span>
+
                         <input
+
                             type="search"
+
                             placeholder="Search projects..."
+
                             aria-label="Search projects"
+
                             value={projectSearch}
+
                             onChange={(event) => setProjectSearch(event.target.value)}
+
                         />
+
                     </div>
+
+
 
                     <div className="project-list">
+
                         {filteredProjects.length === 0 ? (
+
                             <p className="project-search-empty">
+
                                 {projects.length === 0
+
                                     ? "No projects available."
+
                                     : "No matching projects."}
+
                             </p>
+
                         ) : filteredProjects.map((project) => (
+
                             <button
+
                                 key={project.id}
-                                className={`project-item ${
-                                    selectedProject?.id === project.id ? "active" : ""
-                                }`}
-                                onClick={() => loadProjectBugs(project)}
+
+                                className={`project-item ${selectedProject?.id === project.id ? "active" : ""
+
+                                    }`}
+
+                                onClick={() => selectProject(project)}
+
                             >
+
                                 <div className="project-left">
+
                                     <div className="project-icon">
+
                                         {project.name?.charAt(0).toUpperCase() || "P"}
+
                                     </div>
+
+
 
                                     <div>
+
                                         <strong>{project.name}</strong>
-                                        <small>View project bugs</small>
+
+                                        <small>View test cases</small>
+
                                     </div>
+
                                 </div>
+
+
 
                                 <span className="arrow">→</span>
+
                             </button>
+
                         ))}
+
                     </div>
+
                 </aside>
 
-                {/* BUGS */}
+
+
+                {/* BUGS OR TEST CASES */}
+
                 <main className="bugs-section" ref={bugsSectionRef}>
-                    <div className="bugs-toolbar">
-                        <div>
-                            <h2>
-                                {selectedProject ? selectedProject.name : "My Assigned Bugs"}
-                            </h2>
 
-                            <p>
-                                {selectedProject
-                                    ? "All bugs from this project"
-                                    : "Bugs currently assigned to you"}
-                            </p>
+                    {selectedProject && !selectedTestCase ? (
+
+                        /* PROJECT TEST CASES */
+
+                        <div className="testcases-panel">
+
+                            <div className="bugs-toolbar">
+
+                                <div>
+
+                                    <div className="table-header-title-wrap">
+
+                                        <h2>{selectedProject.name} — Test Cases</h2>
+
+                                        <span className="table-badge">{filteredTestCases.length} test cases</span>
+
+                                    </div>
+
+                                    <p>Select a test case to view its bugs</p>
+
+                                </div>
+
+
+
+                                <div className="search-box">
+
+                                    <span>⌕</span>
+
+                                    <input
+
+                                        type="text"
+
+                                        placeholder="Search test cases..."
+
+                                        value={testCaseSearch}
+
+                                        onChange={(e) => setTestCaseSearch(e.target.value)}
+
+                                    />
+
+                                </div>
+
+                            </div>
+
+
+
+                            <div className="filters">
+
+                                <span className="filter-label">Filters</span>
+
+
+
+                                <select
+
+                                    className="select"
+
+                                    value={testCaseStatusFilter}
+
+                                    onChange={(e) => setTestCaseStatusFilter(e.target.value)}
+
+                                >
+
+                                    <option value="all">All Status</option>
+
+                                    <option value="pending">Pending</option>
+
+                                    <option value="in_progress">In Progress</option>
+
+                                    <option value="passed">Passed</option>
+
+                                    <option value="failed">Failed</option>
+
+                                    <option value="blocked">Blocked</option>
+
+                                </select>
+
+
+
+                                <select
+
+                                    className="select"
+
+                                    value={testCaseTypeFilter}
+
+                                    onChange={(e) => setTestCaseTypeFilter(e.target.value)}
+
+                                >
+
+                                    <option value="all">All Types</option>
+
+                                    <option value="functional">Functional</option>
+
+                                    <option value="ui">UI</option>
+
+                                    <option value="regression">Regression</option>
+
+                                    <option value="smoke">Smoke</option>
+
+                                    <option value="integration">Integration</option>
+
+                                    <option value="performance">Performance</option>
+
+                                    <option value="security">Security</option>
+
+                                </select>
+
+                            </div>
+
+
+
+                            {testCasesLoading ? (
+
+                                <div className="table-loading">
+
+                                    <div className="loader" />
+
+                                    <p>Loading project test cases...</p>
+
+                                </div>
+
+                            ) : filteredTestCases.length === 0 ? (
+
+                                <div className="empty-state">
+
+                                    <div className="empty-icon">✓</div>
+
+                                    <h3>No test cases found</h3>
+
+                                    <p>There are no test cases matching your filter criteria.</p>
+
+                                </div>
+
+                            ) : (
+
+                                <div className="table-container">
+
+                                    <table>
+
+                                        <thead>
+
+                                            <tr>
+
+                                                <th>Code</th>
+
+                                                <th>Title</th>
+
+                                                <th>Module</th>
+
+                                                <th>Type</th>
+
+                                                <th>Priority</th>
+
+                                                <th>Status</th>
+
+                                                <th>Bugs</th>
+
+                                                <th>Action</th>
+
+                                            </tr>
+
+                                        </thead>
+
+                                        <tbody>
+
+                                            {filteredTestCases.map((tc) => (
+
+                                                <tr
+                                                    key={tc.id}
+                                                    className="dashboard-clickable-row"
+                                                    onClick={() => loadTestCaseBugs(tc)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter" || e.key === " ") {
+                                                            e.preventDefault();
+                                                            loadTestCaseBugs(tc);
+                                                        }
+                                                    }}
+                                                    tabIndex={0}
+                                                    role="button"
+                                                    aria-label={`View bugs for test case ${tc.title || tc.id}`}
+                                                >
+
+                                                    <td>
+
+                                                        <span className="tc-code-pill">{tc.test_case_code || `TC-${tc.id}`}</span>
+
+                                                    </td>
+
+                                                    <td>
+
+                                                        <div className="bug-name">{tc.title}</div>
+
+                                                        <div className="bug-description">{tc.description || tc.expected_result || "No description"}</div>
+
+                                                    </td>
+
+                                                    <td>
+
+                                                        <span className="tc-module-tag">{tc.module || "General"}</span>
+
+                                                    </td>
+
+                                                    <td>
+
+                                                        <span className="tc-type-badge">{tc.type || "functional"}</span>
+
+                                                    </td>
+
+                                                    <td>
+
+                                                        <span className={`priority ${tc.priority || "medium"}`}>{tc.priority || "Medium"}</span>
+
+                                                    </td>
+
+                                                    <td>
+
+                                                        <span className={`status status-${normalizeStatus(tc.status || "pending")}`}>
+
+                                                            <span className="badge-dot" />
+
+                                                            {formatStatus(tc.status || "pending")}
+
+                                                        </span>
+
+                                                    </td>
+
+                                                    <td>
+
+                                                        <button
+
+                                                            type="button"
+
+                                                            className="tc-bugs-count-btn"
+
+                                                            onClick={(e) => { e.stopPropagation(); loadTestCaseBugs(tc); }}
+
+                                                            title="View bugs for this test case"
+
+                                                        >
+
+                                                            <span className="tc-bugs-num">{tc.bugs_count || 0}</span>
+
+                                                            bugs
+
+                                                        </button>
+
+                                                    </td>
+
+                                                    <td>
+
+                                                        <button
+                                                            type="button"
+                                                            className="table-action-icon"
+                                                            aria-label={`View bugs for test case ${tc.title || tc.id}`}
+                                                            title="View bugs"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                loadTestCaseBugs(tc);
+                                                            }}
+                                                        >
+                                                            <ActionIcon name="view" />
+                                                        </button>
+
+                                                    </td>
+
+                                                </tr>
+
+                                            ))}
+
+                                        </tbody>
+
+                                    </table>
+
+                                </div>
+
+                            )}
+
                         </div>
 
-                        <div className="search-box">
-                            <span>⌕</span>
-
-                            <input
-                                type="text"
-                                placeholder="Search bugs..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="filters">
-                        <span className="filter-label">Filters</span>
-
-                        <select
-                            className="select"
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                        >
-                            <option value="all">All Status</option>
-                            <option value="pending">Pending</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="resolved">Resolved</option>
-                            <option value="reopened">Reopened</option>
-                            <option value="closed">Closed</option>
-                        </select>
-
-                        <select
-                            className="select"
-                            value={priorityFilter}
-                            onChange={(e) => setPriorityFilter(e.target.value)}
-                        >
-                            <option value="all">All Priority</option>
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                            <option value="urgent">Urgent</option>
-                        </select>
-
-                        <span className="result-count">{displayedBugs.length} bugs</span>
-                    </div>
-
-                    {projectLoading ? (
-                        <div className="table-loading">
-                            <div className="loader" />
-                            <p>Loading project bugs...</p>
-                        </div>
-                    ) : displayedBugs.length === 0 ? (
-                        <div className="empty-state">
-                            <div className="empty-icon">✓</div>
-                            <h3>No bugs found</h3>
-                            <p>Try changing your filters or search.</p>
-                        </div>
                     ) : (
-                        <div className="table-container">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Bug</th>
-                                        <th>Project</th>
-                                        <th>Team</th>
-                                        <th>Priority</th>
-                                        <th>Status</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
 
-                                <tbody>
-                                    {displayedBugs.map((bug) => (
-                                        <tr key={bug.id}>
-                                            <td>
-                                                <span className="bug-id">#{bug.id}</span>
-                                            </td>
+                        /* BUGS VIEW (either inside selectedTestCase or My Assigned Bugs) */
 
-                                            <td>
-                                                <div className="bug-name">
-                                                    {bug.title || bug.name || "Untitled Bug"}
-                                                </div>
+                        <div>
 
-                                                <div className="bug-description">
-                                                    {bug.description || "No description"}
-                                                </div>
-                                            </td>
+                            {selectedTestCase && (
 
-                                            <td>
-                                                {bug.project?.name ||
-                                                    bug.project_name ||
-                                                    selectedProject?.name ||
-                                                    "—"}
-                                            </td>
+                                <div className="tc-developer-banner">
 
-                                            <td>
-                                                <span className="team-badge">
-                                                    {formatAssignedTeam(getAssignedTeam(bug, [user]))}
-                                                </span>
-                                            </td>
+                                    <div className="tc-developer-banner-header">
 
-                                            <td>
-                                                <span
-                                                    className={`priority ${
-                                                        bug.priority?.toLowerCase() || ""
-                                                    }`}
-                                                >
-                                                    {bug.priority || "Normal"}
-                                                </span>
-                                            </td>
+                                        <button
 
-                                            <td>
-                                                <span
-                                                    className={`status status-${normalizeStatus(
-                                                        bug.status
-                                                    )}`}
-                                                >
-                                                    {formatStatus(bug.status)}
-                                                </span>
-                                            </td>
+                                            type="button"
 
-                                            <td>
-                                                <button
-                                                    className="view-button"
+                                            className="tc-back-btn"
+
+                                            onClick={() => { setSelectedTestCase(null); closeBug(); }}
+
+                                        >
+
+                                            ← Back to Test Cases
+
+                                        </button>
+
+                                        <div className="tc-banner-info">
+
+                                            <span className="tc-code-pill">{selectedTestCase.test_case_code || `TC-${selectedTestCase.id}`}</span>
+
+                                            <strong>{selectedTestCase.title}</strong>
+
+                                            <span className="tc-module-tag">{selectedTestCase.module || "General"}</span>
+
+                                            <span className="tc-type-badge">{selectedTestCase.type || "functional"}</span>
+
+                                        </div>
+
+                                    </div>
+
+                                    {(selectedTestCase.steps || selectedTestCase.expected_result) && (
+
+                                        <div className="tc-banner-steps">
+
+                                            {selectedTestCase.steps && <div><strong>Steps:</strong> {selectedTestCase.steps}</div>}
+
+                                            {selectedTestCase.expected_result && <div><strong>Expected:</strong> {selectedTestCase.expected_result}</div>}
+
+                                        </div>
+
+                                    )}
+
+                                </div>
+
+                            )}
+
+
+
+                            <div className="bugs-toolbar">
+
+                                <div>
+
+                                    <div className="table-header-title-wrap">
+
+                                        <h2>
+
+                                            {selectedTestCase
+
+                                                ? `Bugs in ${selectedTestCase.test_case_code || 'Test Case'}`
+
+                                                : (selectedProject ? selectedProject.name : "My Assigned Bugs")}
+
+                                        </h2>
+
+                                        <span className="table-badge">{displayedBugs.length} bugs</span>
+
+                                    </div>
+
+
+
+                                    <p>
+
+                                        {selectedTestCase
+
+                                            ? `All reported bugs associated with this test case`
+
+                                            : (selectedProject ? "All bugs from this project" : "Bugs currently assigned to you")}
+
+                                    </p>
+
+                                </div>
+
+
+
+                                <div className="search-box">
+
+                                    <span>⌕</span>
+
+
+
+                                    <input
+
+                                        type="text"
+
+                                        placeholder="Search bugs..."
+
+                                        value={search}
+
+                                        onChange={(e) => setSearch(e.target.value)}
+
+                                    />
+
+                                </div>
+
+                            </div>
+
+
+
+                            <div className="filters">
+
+                                <span className="filter-label">Filters</span>
+
+
+
+                                <select
+
+                                    className="select"
+
+                                    value={statusFilter}
+
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+
+                                >
+
+                                    <option value="all">All Status</option>
+
+                                    <option value="pending">Pending</option>
+
+                                    <option value="in_progress">In Progress</option>
+
+                                    <option value="resolved">Resolved</option>
+
+                                    <option value="reopened">Reopened</option>
+
+                                    <option value="closed">Closed</option>
+
+                                </select>
+
+
+
+                                <select
+
+                                    className="select"
+
+                                    value={priorityFilter}
+
+                                    onChange={(e) => setPriorityFilter(e.target.value)}
+
+                                >
+
+                                    <option value="all">All Priority</option>
+
+                                    <option value="low">Low</option>
+
+                                    <option value="medium">Medium</option>
+
+                                    <option value="high">High</option>
+
+                                    <option value="urgent">Urgent</option>
+
+                                </select>
+
+                            </div>
+
+
+
+                            {(projectLoading || testCaseBugsLoading) ? (
+
+                                <div className="table-loading">
+
+                                    <div className="loader" />
+
+                                    <p>Loading bugs...</p>
+
+                                </div>
+
+                            ) : displayedBugs.length === 0 ? (
+
+                                <div className="empty-state">
+
+                                    <div className="empty-icon">✓</div>
+
+                                    <h3>No bugs found</h3>
+
+                                    <p>Try changing your filters or search.</p>
+
+                                </div>
+
+                            ) : (
+
+                                <div className="table-container">
+
+                                    <table>
+
+                                        <thead>
+
+                                            <tr>
+
+                                                <th>ID</th>
+
+                                                <th>Bug</th>
+
+
+
+                                                <th>Team</th>
+
+                                                <th>Priority</th>
+
+                                                <th>Status</th>
+
+                                                <th>Action</th>
+
+                                            </tr>
+
+                                        </thead>
+
+
+
+                                        <tbody>
+
+                                            {displayedBugs.map((bug) => (
+
+                                                <tr
+                                                    key={bug.id}
+                                                    className="dashboard-clickable-row"
                                                     onClick={() => openBug(bug)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter" || e.key === " ") {
+                                                            e.preventDefault();
+                                                            openBug(bug);
+                                                        }
+                                                    }}
+                                                    tabIndex={0}
+                                                    role="button"
+                                                    aria-label={`View bug ${bug.title || bug.id}`}
                                                 >
-                                                    View
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+
+                                                    <td>
+
+                                                        <span className="bug-id">#{bug.id}</span>
+
+                                                    </td>
+
+
+
+                                                    <td>
+
+                                                        <div className="bug-name">
+
+                                                            {bug.title || bug.name || "Untitled Bug"}
+
+                                                        </div>
+
+
+
+                                                        <div className="bug-description">
+
+                                                            {bug.description || "No description"}
+
+                                                        </div>
+
+                                                    </td>
+
+
+                                                    <td>
+
+                                                        <span className="team-badge">
+
+                                                            {formatAssignedTeam(getAssignedTeam(bug, [user]))}
+
+                                                        </span>
+
+                                                    </td>
+
+
+
+                                                    <td>
+
+                                                        <span
+
+                                                            className={`priority ${bug.priority?.toLowerCase() || ""
+
+                                                                }`}
+
+                                                        >
+
+                                                            {bug.priority || "Normal"}
+
+                                                        </span>
+
+                                                    </td>
+
+
+
+                                                    <td>
+
+                                                        <span
+
+                                                            className={`status status-${normalizeStatus(
+
+                                                                bug.status
+
+                                                            )}`}
+
+                                                        >
+
+                                                            <span className="badge-dot" />
+
+                                                            {formatStatus(bug.status)}
+
+                                                        </span>
+
+                                                    </td>
+
+
+
+                                                    <td>
+
+                                                        <button
+                                                            type="button"
+                                                            className="table-action-icon"
+                                                            aria-label={`View bug ${bug.title || bug.id}`}
+                                                            title="View bug details"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openBug(bug);
+                                                            }}
+                                                        >
+                                                            <ActionIcon name="view" />
+                                                        </button>
+
+                                                    </td>
+
+                                                </tr>
+
+                                            ))}
+
+                                        </tbody>
+
+                                    </table>
+
+                                </div>
+
+                            )}
+
                         </div>
+
                     )}
 
-                    {selectedProject && projectLastPage > 1 && (
-                        <div className="pagination">
-                            <button
-                                disabled={projectPage <= 1}
-                                onClick={() => loadProjectBugs(selectedProject, projectPage - 1)}
-                            >
-                                ← Previous
-                            </button>
-
-                            <span>
-                                Page <strong>{projectPage}</strong> of{" "}
-                                <strong>{projectLastPage}</strong>
-                            </span>
-
-                            <button
-                                disabled={projectPage >= projectLastPage}
-                                onClick={() => loadProjectBugs(selectedProject, projectPage + 1)}
-                            >
-                                Next →
-                            </button>
-                        </div>
-                    )}
                 </main>
+
             </div>
 
+
+
             {/* SINGLE BUG MODAL */}
+
             {selectedBug && (
+
                 <div className="modal-overlay" onClick={closeBug}>
+
                     <div className="bug-modal" onClick={(e) => e.stopPropagation()}>
+
                         <div className="modal-header">
+
                             <div>
+
                                 <span className="modal-bug-id">
+
                                     BUG #{selectedBug.id}
+
                                     {bugLoading && (
+
                                         <em className="loading-note">Loading details…</em>
+
                                     )}
+
                                 </span>
 
+
+
                                 <h2>
+
                                     {selectedBug.title || selectedBug.name || "Bug Details"}
+
                                 </h2>
+
                             </div>
+
+
 
                             <button className="close-button" onClick={closeBug}>
+
                                 ×
+
                             </button>
+
                         </div>
+
+
 
                         <div className="modal-body">
+
                             <div className="bug-detail-grid">
+
                                 <div>
+
                                     <label>Project</label>
+
                                     <p>
+
                                         {selectedBug.project?.name ||
+
                                             selectedBug.project_name ||
+
                                             selectedProject?.name ||
+
                                             "—"}
+
                                     </p>
+
                                 </div>
 
+
+
                                 <div>
+
                                     <label>Priority</label>
+
                                     <p>
+
                                         <span
-                                            className={`priority ${
-                                                selectedBug.priority?.toLowerCase() || ""
-                                            }`}
+
+                                            className={`priority ${selectedBug.priority?.toLowerCase() || ""
+
+                                                }`}
+
                                         >
+
                                             {selectedBug.priority || "Normal"}
+
                                         </span>
+
                                     </p>
+
                                 </div>
 
+
+
                                 <div>
+
                                     <label>Reporter</label>
+
                                     <p>
+
                                         {selectedBug.reporter?.name ||
+
                                             selectedBug.created_by_name ||
+
                                             selectedBug.tester?.name ||
+
                                             "—"}
+
                                     </p>
+
                                 </div>
 
+
+
                                 <div>
+
                                     <label>Assigned To</label>
+
                                     <p>
+
                                         {getAssigneeName(selectedBug, user)}
+
                                     </p>
+
                                 </div>
 
+
+
                                 <div>
+
                                     <label>Assigned Team</label>
+
                                     <p>
+
                                         <span className="team-badge">
+
                                             {formatAssignedTeam(getAssignedTeam(selectedBug, [user]))}
+
                                         </span>
+
                                     </p>
+
                                 </div>
+
                             </div>
+
+
 
                             <div className="description-section">
+
                                 <label>Description</label>
 
+
+
                                 <div className="description-box">
+
                                     {selectedBug.description || "No description available."}
+
                                 </div>
+
                             </div>
+
+
 
                             {normalizeBugUrl(selectedBug.bug_url || selectedBug.url) && (
+
                                 <CopyField
+
                                     label="Bug URL"
+
                                     value={selectedBug.bug_url || selectedBug.url}
+
                                 />
+
                             )}
+
+
 
                             {imageUrl && (
+
                                 <div className="image-section">
+
                                     <label>Bug Screenshot</label>
 
+
+
                                     <div className="image-preview">
+
                                         <BugImage src={imageUrl} alt="Bug screenshot" />
+
                                     </div>
+
                                 </div>
+
                             )}
 
+
+
                             <div className="status-section">
+
                                 <label>Change Status</label>
 
+
+
                                 {selectedStatus === "closed" ? (
+
                                     <div className="closed-note">
+
                                         ✓ This bug was verified and closed by the tester.
+
                                     </div>
+
                                 ) : (
+
                                     <>
+
                                         <StatusDropdown
+
                                             value={selectedBug.status}
+
                                             disabled={statusUpdating}
+
                                             onChange={updateBugStatus}
+
                                         />
 
+
+
                                         {statusUpdating && (
+
                                             <span className="updating-text">Updating...</span>
+
                                         )}
+
                                     </>
+
                                 )}
+
                             </div>
+
                         </div>
+
                     </div>
+
                 </div>
+
             )}
+
+
 
             {/* TOAST */}
+
             {toast && (
+
                 <div
+
                     key={toast.id}
-                    className={`toast ${
-                        toast.type === "error" ? "toast-error" : "toast-success"
-                    }`}
+
+                    className={`toast ${toast.type === "error" ? "toast-error" : "toast-success"
+
+                        }`}
+
                     role="status"
+
                 >
+
                     <div className="toast-icon">{toast.type === "error" ? "!" : "✓"}</div>
 
+
+
                     <div className="toast-content">
+
                         <strong className="toast-title">
+
                             {toast.type === "error" ? "Something went wrong" : "Success"}
+
                         </strong>
+
                         <p className="toast-message">{toast.message}</p>
+
                     </div>
 
+
+
                     <button
+
                         type="button"
+
                         className="toast-close"
+
                         aria-label="Close"
+
                         onClick={() => setToast(null)}
+
                     >
+
                         ×
+
                     </button>
 
+
+
                     <span className="toast-progress" />
+
                 </div>
+
             )}
+
         </div>
+
     );
+
 }
+
+
 
 export default Dashboard;
