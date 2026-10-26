@@ -6,7 +6,7 @@ function Login() {
     const navigate = useNavigate();
     const [error, setError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const API_URL = import.meta.env.VITE_API_BASE_URL;
+    const API_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
     async function handleLogin(e) {
         e.preventDefault();
