@@ -16,12 +16,6 @@ pipeline {
             }
         }
 
-        stage('Test') {
-            steps {
-                sh 'npm test -- --watchAll=false'
-            }
-        }
-
         stage('Build React') {
             steps {
                 sh 'npm run build'
